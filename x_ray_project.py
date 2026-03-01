@@ -35,6 +35,14 @@ from pathlib import Path
 import concurrent.futures
 import logging
 
+# === FIX WINDOWS CONSOLE ENCODING ===
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ('utf-8', 'utf8'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 # === CRASH DIAGNOSTICS LOGGER ===
 log_file = Path("x_ray_crash.log")
 logging.basicConfig(
@@ -433,6 +441,7 @@ VERSION = "3.0.0"
 SCRIPT_NAME = "x_ray_project"
 
 def parse_args():
+    """Build and return the CLI argument parser."""
     p = argparse.ArgumentParser(
         prog=SCRIPT_NAME,
         description="Universal Python dependency analyzer & requirements generator.",
@@ -509,6 +518,7 @@ def collect_py_files(root, args):
     results = []
 
     def _skip_dir(name, rel):
+        """Return True if the directory should be excluded from scanning."""
         if name in _ALWAYS_SKIP or name.endswith(".egg-info"):
             return True
         if args.include and not any(rel.startswith(p) for p in args.include):
@@ -533,7 +543,6 @@ def collect_py_files(root, args):
 # --- Import parsing -----------------------------------------------------------
 
 
-import concurrent.futures
 
 # --- Import parsing -----------------------------------------------------------
 
@@ -612,21 +621,9 @@ def parse_imports(py_files):
 
 # --- Local module detection ---------------------------------------------------
 
-def find_local_modules(root, py_files):
-    """Detect names that are local project modules/packages, not third-party.
-    
-    Covers:
-    - Top-level .py files (their stem is a local module)
-    - Directories with __init__.py (Python packages)
-    - Directories containing .py files (implicit namespace packages / source trees)
-    - Any directory name that appears as rel_path parts[0] of scanned .py files
-    - Sub-module names: any .py file stem or directory name anywhere in the tree
-      that appears as an import (catches 'from controllers import ...' inside
-      sub-packages like API/)
-    """
+def _find_top_level_modules(root):
+    """Find local modules from top-level .py files and directories."""
     local = set()
-    
-    # 1. Top-level .py files and directories
     for item in root.iterdir():
         if item.is_file() and item.suffix == ".py":
             name = item.stem
@@ -635,12 +632,15 @@ def find_local_modules(root, py_files):
         elif item.is_dir():
             name = item.name
             if name.isidentifier() and not name.startswith("."):
-                # If the directory has ANY .py file or __init__.py, it's local
                 has_python = (item / "__init__.py").exists() or any(item.rglob("*.py"))
                 if has_python:
                     local.add(name)
-    
-    # 2. Any top-level directory name that scanned .py files live under
+    return local
+
+
+def _find_modules_from_scanned(root, py_files):
+    """Find local modules from top-level directory of scanned .py files."""
+    local = set()
     for f in py_files:
         try:
             rel = f.relative_to(root)
@@ -650,35 +650,40 @@ def find_local_modules(root, py_files):
             top = rel.parts[0]
             if top.isidentifier() and not top.startswith("."):
                 local.add(top)
-    
-    # 3. ALL directory names and .py file stems in the entire project tree.
-    #    If someone does 'from models import Foo' and models/ exists anywhere
-    #    in the project, it's a local module — not a PyPI package.
-    #    Exception: names that are known PyPI packages (in PYPI_MAP values or
-    #    have an installed distribution) are kept as third-party.
-    known_pypi = set(PYPI_MAP.keys()) | set(PYPI_MAP.values())
+    return local
+
+
+def _find_deep_tree_modules(root, known_pypi):
+    """Find local modules from all dirs and .py file stems in the project tree."""
+    local = set()
     for dirpath, dirnames, filenames in os.walk(root):
-        # Skip irrelevant directories
         rel_dir = os.path.relpath(dirpath, root)
         base_dir = rel_dir.split(os.sep)[0] if rel_dir != "." else ""
         if base_dir in _ALWAYS_SKIP:
             dirnames.clear()
             continue
         for d in dirnames:
-            if d.isidentifier() and not d.startswith(".") and d not in _ALWAYS_SKIP:
-                if d in known_pypi:
-                    continue    # don't shadow a real PyPI package
-                # Only add if the directory has python files
-                dpath = Path(dirpath) / d
-                if (dpath / "__init__.py").exists() or any(dpath.glob("*.py")):
-                    local.add(d)
+            if not (d.isidentifier() and not d.startswith(".") and d not in _ALWAYS_SKIP):
+                continue
+            if d in known_pypi:
+                continue
+            dpath = Path(dirpath) / d
+            if (dpath / "__init__.py").exists() or any(dpath.glob("*.py")):
+                local.add(d)
         for fn in filenames:
             if fn.endswith(".py"):
                 stem = fn[:-3]
-                if stem.isidentifier() and not stem.startswith("_"):
-                    if stem not in known_pypi:
-                        local.add(stem)
-    
+                if stem.isidentifier() and not stem.startswith("_") and stem not in known_pypi:
+                    local.add(stem)
+    return local
+
+
+def find_local_modules(root, py_files):
+    """Detect names that are local project modules/packages, not third-party."""
+    local = _find_top_level_modules(root)
+    local |= _find_modules_from_scanned(root, py_files)
+    known_pypi = set(PYPI_MAP.keys()) | set(PYPI_MAP.values())
+    local |= _find_deep_tree_modules(root, known_pypi)
     return frozenset(local)
 
 
@@ -776,7 +781,7 @@ def merge_with_existing(new_lines, merge_path):
         if key not in seen:
             merged.append(old_line)
             seen.add(key)
-    return sorted(merged, key=lambda l: l.lstrip("#").strip().lower())
+    return sorted(merged, key=lambda ln: ln.lstrip("#").strip().lower())
 
 
 # --- Interactive review -------------------------------------------------------
@@ -803,6 +808,7 @@ def interactive_review(pkgs):
 # --- Pycache cleanup ----------------------------------------------------------
 
 def clean_pycache(root):
+    """Remove all __pycache__ directories under *root*."""
     count = 0
     for dirpath, dirnames, _ in os.walk(root):
         for d in list(dirnames):
@@ -873,6 +879,7 @@ def find_orphans(root, py_files, import_locs, custom_entrypoints=None):
 
 
 def write_graph(third_party, root):
+    """Write a Graphviz .dot file of the import dependency graph."""
     dot_path = root / "import_graph.dot"
     with open(dot_path, "w", encoding="utf-8") as f:
         f.write("digraph imports {\n  rankdir=LR;\n  node [shape=box];\n")
@@ -888,22 +895,15 @@ def write_graph(third_party, root):
     print(f"  > Graph written to {dot_path}")
 
 
-def write_interactive_graph(third_party, root):
-    """Generate a standalone HTML file with an interactive dependency graph + table view."""
-    html_path = root / "import_graph.html"
-    
-    # 1. Build node/edge data + dependency metrics
-    nodes = []
-    edges = []
-    node_ids = {}
+def _build_graph_data(third_party, root):
+    """Build node/edge data and metrics for dependency graph."""
+    nodes, edges, node_ids = [], [], {}
     next_id = 1
-    
-    # Track metrics for table view
-    file_metrics = {}  # {filename: {size, imports: set()}}
-    package_metrics = {}  # {package: {files: set(), usage_count}}
-    
-    # Helper to get/create node ID
+    file_metrics = {}
+    package_metrics = {}
+
     def get_id(label, group):
+        """Return a unique integer ID for *label*, creating one if needed."""
         nonlocal next_id
         if label not in node_ids:
             node_ids[label] = next_id
@@ -914,291 +914,193 @@ def write_interactive_graph(third_party, root):
     for mod, locs in third_party.items():
         pkg = resolve_name(mod)
         pkg_id = get_id(pkg, "package")
-        
         if pkg not in package_metrics:
             package_metrics[pkg] = {"files": set(), "usage_count": 0}
-        
         seen_files = set()
         for fpath, _ in locs:
             short = os.path.relpath(fpath, root)
-            if short not in seen_files:
-                seen_files.add(short)
-                file_id = get_id(short, "file")
-                edges.append({"from": file_id, "to": pkg_id})
-                
-                # Track file metrics
-                if short not in file_metrics:
-                    try:
-                        size = Path(fpath).stat().st_size
-                    except:
-                        size = 0
-                    file_metrics[short] = {"size": size, "imports": set()}
-                file_metrics[short]["imports"].add(pkg)
-                
-                # Track package metrics
-                package_metrics[pkg]["files"].add(short)
-                package_metrics[pkg]["usage_count"] += 1
+            if short in seen_files:
+                continue
+            seen_files.add(short)
+            file_id = get_id(short, "file")
+            edges.append({"from": file_id, "to": pkg_id})
+            if short not in file_metrics:
+                try:
+                    size = Path(fpath).stat().st_size
+                except Exception:
+                    size = 0
+                file_metrics[short] = {"size": size, "imports": set()}
+            file_metrics[short]["imports"].add(pkg)
+            package_metrics[pkg]["files"].add(short)
+            package_metrics[pkg]["usage_count"] += 1
 
-    # 2. Build table data
     table_rows = []
-    
-    # Files table
     for fname, metrics in sorted(file_metrics.items()):
         table_rows.append({
-            "type": "file",
-            "name": fname,
+            "type": "file", "name": fname,
             "size_kb": round(metrics["size"] / 1024, 1),
             "imports_count": len(metrics["imports"]),
-            "imports": ", ".join(sorted(metrics["imports"])[:5]),  # Limit to 5
+            "imports": ", ".join(sorted(metrics["imports"])[:5]),
         })
-    
-    # Packages table
     for pkg, metrics in sorted(package_metrics.items()):
         table_rows.append({
-            "type": "package",
-            "name": pkg,
-            "size_kb": "-",
+            "type": "package", "name": pkg, "size_kb": "-",
             "imports_count": len(metrics["files"]),
             "imports": f"Used by {len(metrics['files'])} files ({metrics['usage_count']} times)",
         })
+    return nodes, edges, file_metrics, package_metrics, table_rows
 
-    # 3. Serialize to JSON
-    data_json = json.dumps({"nodes": nodes, "edges": edges})
-    table_json = json.dumps(table_rows)
-    
-    # 4. Embed in HTML Template with dual-view UI
-    html_content = f"""<!DOCTYPE html>
-<html>
-<head>
-  <title>Dependency Analysis - {root.name}</title>
-  <style>
-    * {{ box-sizing: border-box; }}
-    body {{ margin: 0; padding: 0; background: #1a1a2e; color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }}
-    
-    .header {{ 
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+
+def _graph_css():
+    """Return CSS styles for the interactive dependency graph."""
+    return """
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: #1a1a2e; color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .header { position: fixed; top: 0; left: 0; right: 0; z-index: 100;
       background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
       padding: 15px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-      display: flex; justify-content: space-between; align-items: center;
-    }}
-    
-    .header h1 {{ margin: 0; font-size: 24px; color: #00d4ff; }}
-    .header .stats {{ font-size: 14px; color: #aaa; }}
-    
-    .tab-buttons {{ display: flex; gap: 10px; }}
-    .tab-btn {{
-      padding: 8px 20px; background: rgba(255,255,255,0.1); border: none;
-      color: #fff; cursor: pointer; border-radius: 5px; transition: all 0.3s;
-      font-size: 14px; font-weight: 500;
-    }}
-    .tab-btn:hover {{ background: rgba(255,255,255,0.2); }}
-    .tab-btn.active {{ background: #00d4ff; color: #000; }}
-    
-    .content {{ margin-top: 70px; height: calc(100vh - 70px); }}
-    .view {{ display: none; height: 100%; }}
-    .view.active {{ display: block; }}
-    
-    /* Graph View */
-    #graph-view {{ position: relative; }}
-    #mynetwork {{ width: 100%; height: 100%; }}
-    .graph-legend {{
-      position: absolute; bottom: 20px; right: 20px; z-index: 10;
-      background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px;
-      font-size: 12px;
-    }}
-    .legend-item {{ display: flex; align-items: center; margin: 8px 0; }}
-    .legend-color {{ width: 20px; height: 20px; border-radius: 50%; margin-right: 10px; }}
-    .legend-color.file {{ background: #2196f3; border: 2px solid #0d47a1; }}
-    .legend-color.package {{ background: #ff9800; border: 2px solid #e65100; clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%); }}
-    
-    /* Table View */
-    #table-view {{ padding: 20px; overflow-y: auto; }}
-    .search-bar {{
-      margin-bottom: 20px; padding: 12px; width: 100%; max-width: 600px;
-      background: rgba(255,255,255,0.1); border: 1px solid #444;
-      border-radius: 5px; color: #fff; font-size: 14px;
-    }}
-    .search-bar:focus {{ outline: none; border-color: #00d4ff; }}
-    
-    table {{
-      width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.05);
-      border-radius: 8px; overflow: hidden;
-    }}
-    th {{
-      background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
-      padding: 12px; text-align: left; font-weight: 600;
-      cursor: pointer; user-select: none; position: sticky; top: 0;
-    }}
-    th:hover {{ background: #1a4d7a; }}
-    th::after {{ content: ' ↕'; color: #666; font-size: 10px; }}
-    
-    tr {{ border-bottom: 1px solid rgba(255,255,255,0.1); transition: background 0.2s; }}
-    tr:hover {{ background: rgba(0,212,255,0.1); }}
-    td {{ padding: 12px; }}
-    
-    .type-badge {{
-      display: inline-block; padding: 4px 10px; border-radius: 12px;
-      font-size: 11px; font-weight: 600; text-transform: uppercase;
-    }}
-    .type-badge.file {{ background: #2196f3; color: #fff; }}
-    .type-badge.package {{ background: #ff9800; color: #fff; }}
-    
-    .imports-cell {{ font-size: 12px; color: #aaa; max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-  </style>
-  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <h1>📦 {root.name}</h1>
-      <div class="stats">Nodes: {len(nodes)} | Edges: {len(edges)} | Files: {len(file_metrics)} | Packages: {len(package_metrics)}</div>
-    </div>
-    <div class="tab-buttons">
-      <button class="tab-btn active" onclick="showView('graph')">🌐 Graph View</button>
-      <button class="tab-btn" onclick="showView('table')">📊 Table View</button>
-    </div>
-  </div>
-  
-  <div class="content">
-    <!-- Graph View -->
-    <div id="graph-view" class="view active">
-      <div id="mynetwork"></div>
-      <div class="graph-legend">
-        <div style="margin-bottom: 10px; font-weight: 600;">Legend</div>
-        <div class="legend-item"><div class="legend-color file"></div> Project Files</div>
-        <div class="legend-item"><div class="legend-color package"></div> Dependencies</div>
-        <div style="margin-top: 10px; color: #666; font-size: 11px;">Scroll to zoom · Drag to pan</div>
-      </div>
-    </div>
-    
-    <!-- Table View -->
-    <div id="table-view" class="view">
-      <input type="text" class="search-bar" id="searchBox" placeholder="🔍 Search files or packages..." onkeyup="filterTable()">
-      <table id="dataTable">
-        <thead>
-          <tr>
-            <th onclick="sortTable(0)">Type</th>
-            <th onclick="sortTable(1)">Name</th>
-            <th onclick="sortTable(2)">Size (KB)</th>
-            <th onclick="sortTable(3)"># Imports</th>
-            <th onclick="sortTable(4)">Dependencies</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody">
-        </tbody>
-      </table>
-    </div>
-  </div>
-  
-  <script type="text/javascript">
-    // Data
-    const graphData = {data_json};
-    const tableData = {table_json};
-    
-    // Initialize Graph
+      display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { margin: 0; font-size: 24px; color: #00d4ff; }
+    .header .stats { font-size: 14px; color: #aaa; }
+    .tab-buttons { display: flex; gap: 10px; }
+    .tab-btn { padding: 8px 20px; background: rgba(255,255,255,0.1); border: none;
+      color: #fff; cursor: pointer; border-radius: 5px; transition: all 0.3s; font-size: 14px; font-weight: 500; }
+    .tab-btn:hover { background: rgba(255,255,255,0.2); }
+    .tab-btn.active { background: #00d4ff; color: #000; }
+    .content { margin-top: 70px; height: calc(100vh - 70px); }
+    .view { display: none; height: 100%; }
+    .view.active { display: block; }
+    #graph-view { position: relative; }
+    #mynetwork { width: 100%; height: 100%; }
+    .graph-legend { position: absolute; bottom: 20px; right: 20px; z-index: 10;
+      background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; font-size: 12px; }
+    .legend-item { display: flex; align-items: center; margin: 8px 0; }
+    .legend-color { width: 20px; height: 20px; border-radius: 50%; margin-right: 10px; }
+    .legend-color.file { background: #2196f3; border: 2px solid #0d47a1; }
+    .legend-color.package { background: #ff9800; border: 2px solid #e65100;
+      clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%); }
+    #table-view { padding: 20px; overflow-y: auto; }
+    .search-bar { margin-bottom: 20px; padding: 12px; width: 100%; max-width: 600px;
+      background: rgba(255,255,255,0.1); border: 1px solid #444; border-radius: 5px; color: #fff; font-size: 14px; }
+    .search-bar:focus { outline: none; border-color: #00d4ff; }
+    table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden; }
+    th { background: linear-gradient(135deg, #0f3460 0%, #16213e 100%); padding: 12px; text-align: left;
+      font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; }
+    th:hover { background: #1a4d7a; }
+    th::after { content: ' \\2195'; color: #666; font-size: 10px; }
+    tr { border-bottom: 1px solid rgba(255,255,255,0.1); transition: background 0.2s; }
+    tr:hover { background: rgba(0,212,255,0.1); }
+    td { padding: 12px; }
+    .type-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .type-badge.file { background: #2196f3; color: #fff; }
+    .type-badge.package { background: #ff9800; color: #fff; }
+    .imports-cell { font-size: 12px; color: #aaa; max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+"""
+
+
+def _graph_javascript():
+    """Return JavaScript for the interactive dependency graph."""
+    return """
     const container = document.getElementById('mynetwork');
-    const options = {{
-      nodes: {{
-        shape: 'dot',
-        size: 16,
-        font: {{ size: 14, color: '#ffffff' }},
-        borderWidth: 2
-      }},
-      edges: {{
-        width: 1,
-        color: {{ color: '#555555', highlight: '#00ccff' }},
-        smooth: {{ type: 'continuous' }}
-      }},
-      groups: {{
-        package: {{ color: {{ background: '#ff9800', border: '#e65100' }}, shape: 'hexagon', size: 24 }},
-        file:    {{ color: {{ background: '#2196f3', border: '#0d47a1' }} }}
-      }},
-      physics: {{
-        stabilization: false,
-        barnesHut: {{ gravitationalConstant: -3000, springConstant: 0.04, springLength: 95 }}
-      }}
-    }};
+    const options = {
+      nodes: { shape: 'dot', size: 16, font: { size: 14, color: '#ffffff' }, borderWidth: 2 },
+      edges: { width: 1, color: { color: '#555555', highlight: '#00ccff' }, smooth: { type: 'continuous' } },
+      groups: {
+        package: { color: { background: '#ff9800', border: '#e65100' }, shape: 'hexagon', size: 24 },
+        file:    { color: { background: '#2196f3', border: '#0d47a1' } }
+      },
+      physics: { stabilization: false, barnesHut: { gravitationalConstant: -3000, springConstant: 0.04, springLength: 95 } }
+    };
     new vis.Network(container, graphData, options);
-    
-    // Initialize Table
+
     const tbody = document.getElementById('tableBody');
-    function renderTable(data) {{
+    function renderTable(data) {
       tbody.innerHTML = '';
-      data.forEach(row => {{
+      data.forEach(row => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><span class="type-badge ${{row.type}}">${{row.type}}</span></td>
-          <td style="font-family: monospace; color: #00d4ff;">${{row.name}}</td>
-          <td>${{row.size_kb}}</td>
-          <td>${{row.imports_count}}</td>
-          <td class="imports-cell" title="${{row.imports}}">${{row.imports}}</td>
-        `;
+        tr.innerHTML = `<td><span class="type-badge ${row.type}">${row.type}</span></td>
+          <td style="font-family: monospace; color: #00d4ff;">${row.name}</td>
+          <td>${row.size_kb}</td><td>${row.imports_count}</td>
+          <td class="imports-cell" title="${row.imports}">${row.imports}</td>`;
         tbody.appendChild(tr);
-      }});
-    }}
+      });
+    }
     renderTable(tableData);
-    
-    // View Switching
-    function showView(viewName) {{
+
+    function showView(viewName) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      
-      if (viewName === 'graph') {{
+      if (viewName === 'graph') {
         document.getElementById('graph-view').classList.add('active');
         document.querySelectorAll('.tab-btn')[0].classList.add('active');
-      }} else {{
+      } else {
         document.getElementById('table-view').classList.add('active');
         document.querySelectorAll('.tab-btn')[1].classList.add('active');
-      }}
-    }}
-    
-    // Table Sorting
-    let sortDir = {{}};
-    function sortTable(colIdx) {{
+      }
+    }
+
+    let sortDir = {};
+    function sortTable(colIdx) {
       const direction = sortDir[colIdx] === 'asc' ? 'desc' : 'asc';
-      sortDir = {{}}; // Reset
-      sortDir[colIdx] = direction;
-      
-      const sorted = [...tableData].sort((a, b) => {{
-        let aVal = Object.values(a)[colIdx];
-        let bVal = Object.values(b)[colIdx];
-        
-        // Handle numeric columns
-        if (colIdx === 2) {{ // Size
-          aVal = aVal === '-' ? -1 : parseFloat(aVal);
-          bVal = bVal === '-' ? -1 : parseFloat(bVal);
-        }} else if (colIdx === 3) {{ // Imports count
-          aVal = parseInt(aVal);
-          bVal = parseInt(bVal);
-        }}
-        
+      sortDir = {}; sortDir[colIdx] = direction;
+      const sorted = [...tableData].sort((a, b) => {
+        let aVal = Object.values(a)[colIdx], bVal = Object.values(b)[colIdx];
+        if (colIdx === 2) { aVal = aVal === '-' ? -1 : parseFloat(aVal); bVal = bVal === '-' ? -1 : parseFloat(bVal); }
+        else if (colIdx === 3) { aVal = parseInt(aVal); bVal = parseInt(bVal); }
         if (aVal < bVal) return direction === 'asc' ? -1 : 1;
         if (aVal > bVal) return direction === 'asc' ? 1 : -1;
         return 0;
-      }});
-      
+      });
       renderTable(sorted);
-    }}
-    
-    // Search/Filter
-    function filterTable() {{
+    }
+
+    function filterTable() {
       const query = document.getElementById('searchBox').value.toLowerCase();
-      const filtered = tableData.filter(row => 
-        row.name.toLowerCase().includes(query) ||
-        row.imports.toLowerCase().includes(query)
-      );
-      renderTable(filtered);
-    }}
-  </script>
-</body>
-</html>"""
+      renderTable(tableData.filter(row => row.name.toLowerCase().includes(query) || row.imports.toLowerCase().includes(query)));
+    }
+"""
+
+
+def write_interactive_graph(third_party, root):
+    """Generate a standalone HTML file with an interactive dependency graph + table view."""
+    html_path = root / "import_graph.html"
+    nodes, edges, file_metrics, package_metrics, table_rows = _build_graph_data(third_party, root)
+    data_json = json.dumps({"nodes": nodes, "edges": edges})
+    table_json = json.dumps(table_rows)
+    css = _graph_css()
+    js = _graph_javascript()
+
+    html_content = (
+        f"<!DOCTYPE html><html><head><title>Dependency Analysis - {root.name}</title>\n"
+        f"<style>{css}</style>\n"
+        '<script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>\n'
+        "</head><body>\n"
+        f'<div class="header"><div><h1>{root.name}</h1>\n'
+        f'<div class="stats">Nodes: {len(nodes)} | Edges: {len(edges)} | Files: {len(file_metrics)} | Packages: {len(package_metrics)}</div></div>\n'
+        '<div class="tab-buttons">'
+        '<button class="tab-btn active" onclick="showView(\'graph\')">Graph View</button>'
+        '<button class="tab-btn" onclick="showView(\'table\')">Table View</button></div></div>\n'
+        '<div class="content">\n'
+        '<div id="graph-view" class="view active"><div id="mynetwork"></div>\n'
+        '<div class="graph-legend"><div style="margin-bottom:10px;font-weight:600;">Legend</div>'
+        '<div class="legend-item"><div class="legend-color file"></div> Project Files</div>'
+        '<div class="legend-item"><div class="legend-color package"></div> Dependencies</div>'
+        '<div style="margin-top:10px;color:#666;font-size:11px;">Scroll to zoom</div></div></div>\n'
+        '<div id="table-view" class="view">'
+        '<input type="text" class="search-bar" id="searchBox" placeholder="Search..." onkeyup="filterTable()">\n'
+        '<table id="dataTable"><thead><tr>'
+        '<th onclick="sortTable(0)">Type</th><th onclick="sortTable(1)">Name</th>'
+        '<th onclick="sortTable(2)">Size (KB)</th><th onclick="sortTable(3)"># Imports</th>'
+        '<th onclick="sortTable(4)">Dependencies</th></tr></thead><tbody id="tableBody"></tbody></table></div></div>\n'
+        f'<script type="text/javascript">const graphData = {data_json}; const tableData = {table_json};\n{js}</script>\n'
+        "</body></html>"
+    )
 
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
-    
     print(f"  > Interactive graph written to {html_path}")
-    print(f"    - Graph view: Visual dependency network")
-    print(f"    - Table view: Sortable, searchable list with metrics")
+    print("    - Graph view: Visual dependency network")
+    print("    - Table view: Sortable, searchable list with metrics")
 
 
 
@@ -1403,96 +1305,65 @@ _STANDARD_DIRS = {
     "i18n":     "Internationalization / locales",
 }
 
-def analyze_structure(root, py_files, third_party):
-    """Analyze overall project structure and return a health report."""
-    report = {
-        "score": 100,
-        "issues": [],
-        "good": [],
-        "stats": {},
-    }
-    
-    # Count files by top-level directory
+def _gather_file_stats(root, py_files, third_party):
+    """Gather file statistics for the project structure report."""
     dir_counts = Counter()
     root_file_count = 0
     total_lines = 0
     largest_files = []
-    
     for f in py_files:
         try:
             rel = f.relative_to(root)
         except ValueError:
             continue
-        
         top = str(rel.parts[0]) if len(rel.parts) > 1 else "."
         dir_counts[top] += 1
-        
         if len(rel.parts) == 1:
             root_file_count += 1
-        
-        # Count lines and find largest files
         try:
             lines = f.read_text(encoding="utf-8", errors="ignore").count("\n") + 1
             total_lines += lines
             largest_files.append((str(rel), lines))
         except OSError:
             pass
-    
     largest_files.sort(key=lambda x: x[1], reverse=True)
-    
-    report["stats"] = {
-        "total_py_files": len(py_files),
-        "total_lines": total_lines,
-        "root_files": root_file_count,
-        "directories": dict(dir_counts),
-        "largest_files": largest_files[:10],
-        "third_party_count": len(third_party),
-    }
-    
-    # ── Check: too many files at root ──
+    return {
+        "total_py_files": len(py_files), "total_lines": total_lines,
+        "root_files": root_file_count, "directories": dict(dir_counts),
+        "largest_files": largest_files[:10], "third_party_count": len(third_party),
+    }, root_file_count, dir_counts, largest_files
+
+
+def _check_root_clutter(report, root_file_count):
+    """Check for too many files at project root."""
     if root_file_count > 10:
         report["issues"].append(
             f"ROOT CLUTTER: {root_file_count} Python files at project root. "
-            f"Consider moving source code into a src/ or core/ package."
-        )
+            f"Consider moving source code into a src/ or core/ package.")
         report["score"] -= min(15, root_file_count - 10)
     elif root_file_count <= 5:
         report["good"].append(f"Clean root: only {root_file_count} Python files at project root.")
-    
-    # ── Check: tests directory exists ──
+
+
+def _check_tests(report, dir_counts, py_files):
+    """Check for tests directory or scattered test files."""
     tests_dir = any(d in dir_counts for d in ("tests", "test", "Tests"))
     if tests_dir:
         test_count = sum(dir_counts.get(d, 0) for d in ("tests", "test", "Tests"))
         report["good"].append(f"Tests directory present with {test_count} test file(s).")
     else:
-        # Check for test files elsewhere
         scattered_tests = [f for f in py_files if f.name.startswith("test_")]
         if scattered_tests:
             report["issues"].append(
-                f"SCATTERED TESTS: {len(scattered_tests)} test file(s) found outside tests/ directory."
-            )
+                f"SCATTERED TESTS: {len(scattered_tests)} test file(s) found outside tests/ directory.")
             report["score"] -= 10
         else:
             report["issues"].append("NO TESTS: No test files or tests/ directory found.")
             report["score"] -= 15
-    
-    # ── Check: docs directory ──
-    docs_exists = (root / "docs").exists() or (root / "Docs").exists() or (root / "doc").exists()
-    if docs_exists:
-        report["good"].append("Documentation directory present.")
-    else:
-        report["issues"].append("NO DOCS: Consider adding a docs/ directory for project documentation.")
-        report["score"] -= 5
-    
-    # ── Check: very large files ──
-    for fpath, lines in largest_files[:5]:
-        if lines > 1000:
-            report["issues"].append(
-                f"LARGE FILE: {fpath} has {lines:,} lines. Consider splitting into modules."
-            )
-            report["score"] -= 3
-    
-    # ── Check: __init__.py presence in packages ──
+
+
+def _check_init_files(report, root):
+    """Check for missing __init__.py in Python packages."""
     for dirpath, dirnames, filenames in os.walk(root):
         rel = os.path.relpath(dirpath, root)
         if rel == ".":
@@ -1502,13 +1373,36 @@ def analyze_structure(root, py_files, third_party):
             continue
         py_in_dir = [f for f in filenames if f.endswith(".py")]
         if py_in_dir and "__init__.py" not in filenames:
-            # Only flag if it looks like a Python package (not scripts/)
             if parts[0] not in ("scripts", "bin", "tools", "docs", "Docs"):
                 report["issues"].append(
-                    f"MISSING __init__.py: {rel}/ has {len(py_in_dir)} Python files but no __init__.py"
-                )
+                    f"MISSING __init__.py: {rel}/ has {len(py_in_dir)} Python files but no __init__.py")
                 report["score"] -= 2
-    
+
+
+def analyze_structure(root, py_files, third_party):
+    """Analyze overall project structure and return a health report."""
+    report = {"score": 100, "issues": [], "good": [], "stats": {}}
+    stats, root_file_count, dir_counts, largest_files = _gather_file_stats(root, py_files, third_party)
+    report["stats"] = stats
+
+    _check_root_clutter(report, root_file_count)
+    _check_tests(report, dir_counts, py_files)
+
+    # Check: docs directory
+    docs_exists = (root / "docs").exists() or (root / "Docs").exists() or (root / "doc").exists()
+    if docs_exists:
+        report["good"].append("Documentation directory present.")
+    else:
+        report["issues"].append("NO DOCS: Consider adding a docs/ directory for project documentation.")
+        report["score"] -= 5
+
+    # Check: very large files
+    for fpath, lines in largest_files[:5]:
+        if lines > 1000:
+            report["issues"].append(f"LARGE FILE: {fpath} has {lines:,} lines. Consider splitting into modules.")
+            report["score"] -= 3
+
+    _check_init_files(report, root)
     report["score"] = max(0, report["score"])
     return report
 
@@ -1578,8 +1472,8 @@ def generate_gitignore(root):
     if gitignore_path.exists():
         existing = gitignore_path.read_text(encoding="utf-8")
         # Find lines in template that are missing from existing
-        existing_lines = {l.strip() for l in existing.splitlines() if l.strip() and not l.startswith("#")}
-        template_lines = [l for l in _GITIGNORE_PYTHON.splitlines()]
+        existing_lines = {ln.strip() for ln in existing.splitlines() if ln.strip() and not ln.startswith("#")}
+        template_lines = [ln for ln in _GITIGNORE_PYTHON.splitlines()]
         
         additions = []
         for line in template_lines:
@@ -1603,67 +1497,49 @@ def generate_gitignore(root):
 
 # ── Print health report ──────────────────────────────────────────────────────
 
-def print_health_report(root, py_files, third_party, third_party_names):
-    """Run all health checks and print a comprehensive report."""
-    
-    print(f"\n  {'='*56}")
-    print(f"    PROJECT HEALTH REPORT")
-    print(f"  {'='*56}\n")
-    
-    # 1. Structure analysis
-    report = analyze_structure(root, py_files, third_party)
-    stats = report["stats"]
-    
-    score = report["score"]
+def _score_to_grade(score):
+    """Convert numeric score to letter grade string."""
     if score >= 90:
-        grade = "A  (Excellent)"
-    elif score >= 75:
-        grade = "B  (Good)"
-    elif score >= 60:
-        grade = "C  (Needs work)"
-    elif score >= 40:
-        grade = "D  (Poor)"
-    else:
-        grade = "F  (Critical)"
-    
-    print(f"    Health Score:  {score}/100  {grade}")
-    print(f"    {'─'*50}")
-    
-    # Stats
-    print(f"\n    PROJECT STATS")
+        return "A  (Excellent)"
+    if score >= 75:
+        return "B  (Good)"
+    if score >= 60:
+        return "C  (Needs work)"
+    if score >= 40:
+        return "D  (Poor)"
+    return "F  (Critical)"
+
+
+def _print_stats_and_issues(stats, report):
+    """Print project stats, good practices, and issues sections."""
+    print("\n    PROJECT STATS")
     print(f"      Python files:      {stats['total_py_files']:>6,}")
     print(f"      Lines of code:     {stats['total_lines']:>6,}")
     print(f"      Root-level files:  {stats['root_files']:>6}")
     print(f"      Third-party pkgs:  {stats['third_party_count']:>6}")
-    
-    # Directory breakdown
-    print(f"\n    DIRECTORY BREAKDOWN")
+    print("\n    DIRECTORY BREAKDOWN")
     for d, count in sorted(stats["directories"].items(), key=lambda x: -x[1]):
         label = f"      {d + '/':<25s}" if d != "." else f"      {'(root)':<25s}"
         print(f"{label} {count:>4} files")
-    
-    # Largest files
     if stats["largest_files"]:
-        print(f"\n    LARGEST FILES")
+        print("\n    LARGEST FILES")
         for fpath, lines in stats["largest_files"][:8]:
             marker = " (!)" if lines > 1000 else ""
             print(f"      {fpath:<40s} {lines:>6,} lines{marker}")
-    
-    # Good things
     if report["good"]:
-        print(f"\n    GOOD")
+        print("\n    GOOD")
         for g in report["good"]:
             print(f"      [+] {g}")
-    
-    # Issues
     if report["issues"]:
-        print(f"\n    ISSUES")
+        print("\n    ISSUES")
         for issue in report["issues"]:
             print(f"      [-] {issue}")
-    
-    # 2. Essential files
+
+
+def _print_essentials_section(root, third_party_names, report):
+    """Print essential files check section."""
     present, missing = check_essentials(root, third_party_names)
-    print(f"\n    ESSENTIAL FILES")
+    print("\n    ESSENTIAL FILES")
     for name, found_as in present:
         label = f" (as {found_as})" if found_as != name else ""
         print(f"      [+] {name}{label}")
@@ -1671,22 +1547,13 @@ def print_health_report(root, py_files, third_party, third_party_names):
         print(f"      [-] {name}  [{priority}]  {why}")
         if priority == "HIGH":
             report["score"] = max(0, report["score"] - 5)
-    
-    # 3. Misplaced files
-    misplaced = find_misplaced_files(root)
-    if misplaced:
-        print(f"\n    MISPLACED FILES")
-        for fpath, desc, expected in misplaced[:20]:
-            print(f"      [-] {fpath}")
-            print(f"           -> {desc}  (expected in: {expected})")
-    else:
-        print(f"\n    MISPLACED FILES")
-        print(f"      [+] All files appear to be in appropriate directories.")
-    
-    # 4. Junk files
+
+
+def _print_junk_section(root):
+    """Print junk/temp files section."""
     junk_files, junk_dirs = find_junk_files(root)
     if junk_files or junk_dirs:
-        print(f"\n    JUNK / TEMP FILES")
+        print("\n    JUNK / TEMP FILES")
         if junk_dirs:
             print(f"      Cached directories ({len(junk_dirs)}):")
             for d in junk_dirs[:10]:
@@ -1700,15 +1567,225 @@ def print_health_report(root, py_files, third_party, third_party_names):
             if len(junk_files) > 15:
                 print(f"        ... and {len(junk_files) - 15} more")
     else:
-        print(f"\n    JUNK / TEMP FILES")
-        print(f"      [+] No junk files detected. Clean project!")
-    
-    # Final score (recalc)
+        print("\n    JUNK / TEMP FILES")
+        print("      [+] No junk files detected. Clean project!")
+
+
+def print_health_report(root, py_files, third_party, third_party_names):
+    """Run all health checks and print a comprehensive report."""
+    print(f"\n  {'='*56}")
+    print("    PROJECT HEALTH REPORT")
+    print(f"  {'='*56}\n")
+
+    report = analyze_structure(root, py_files, third_party)
+    grade = _score_to_grade(report["score"])
+    print(f"    Health Score:  {report['score']}/100  {grade}")
+    print(f"    {'─'*50}")
+
+    _print_stats_and_issues(report["stats"], report)
+    _print_essentials_section(root, third_party_names, report)
+
+    misplaced = find_misplaced_files(root)
+    print("\n    MISPLACED FILES")
+    if misplaced:
+        for fpath, desc, expected in misplaced[:20]:
+            print(f"      [-] {fpath}")
+            print(f"           -> {desc}  (expected in: {expected})")
+    else:
+        print("      [+] All files appear to be in appropriate directories.")
+
+    _print_junk_section(root)
+
     print(f"\n    {'─'*50}")
     print(f"    Final Score:  {report['score']}/100  {grade}")
     print(f"  {'='*56}\n")
-    
     return report
+
+
+# =============================================================================
+#  Main -- helpers
+# =============================================================================
+
+
+def _build_output_lines(args, unique, root):
+    """Steps 4-5: build output lines for toml or txt format."""
+    not_installed = None
+    output_lines: list[str] = []
+
+    if args.format == "toml":
+        output_lines.append("[project.dependencies]")
+        for mod in unique:
+            pkg = resolve_name(mod)
+            ver = get_installed_version(pkg)
+            desc = LIB_DESCRIPTIONS.get(pkg)
+            if ver and not args.no_pin:
+                ver_spec = f'">={ver}"'
+            else:
+                ver_spec = '"*"'
+            comment = f"  # {desc}" if (desc and not args.no_descriptions) else ""
+            output_lines.append(f'{pkg} = {ver_spec}{comment}')
+    else:
+        output_lines = [
+            f"# Auto-generated by x_ray_project v{__version__}",
+            f"# Project: {root.name}",
+            f"# {len(unique)} third-party packages detected",
+            "",
+        ]
+        req_only: list[str] = []
+        not_installed = []
+        for mod in unique:
+            pkg = resolve_name(mod)
+            line = format_requirement(pkg, pin=not args.no_pin)
+            desc = LIB_DESCRIPTIONS.get(pkg)
+            if not args.no_descriptions and desc:
+                output_lines.append(f"# {desc}")
+            output_lines.append(line)
+            req_only.append(line)
+            if "==" not in line and not args.no_pin:
+                not_installed.append(pkg)
+
+        if args.merge:
+            output_lines = merge_with_existing(output_lines, args.merge)
+        if args.interactive:
+            req_only = interactive_review(req_only)
+            output_lines = [
+                f"# Auto-generated by x_ray_project v{__version__}",
+                f"# Project: {root.name}", "",
+            ]
+            for line in req_only:
+                pkg = line.split("==")[0].strip()
+                desc = LIB_DESCRIPTIONS.get(pkg)
+                if not args.no_descriptions and desc:
+                    output_lines.append(f"# {desc}")
+                output_lines.append(line)
+
+    return output_lines, not_installed
+
+
+def _write_output(args, output_lines, unique, root, not_installed):
+    """Step 6: write the output file and warn about unpinned packages."""
+    if args.output:
+        out_filename = args.output
+    else:
+        out_filename = "pyproject.toml" if args.format == "toml" else "requirements.txt"
+
+    out_path = Path(out_filename)
+    if not out_path.is_absolute():
+        out_path = root / out_filename
+
+    with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+        for line in output_lines:
+            f.write(line + "\n")
+    print(f"\n  Written -> {out_path}  ({len(unique)} packages)")
+
+    if not_installed:
+        print(f"  WARNING: {len(not_installed)} package(s) not installed locally (no version pin):")
+        for p in not_installed:
+            print(f"       - {p}")
+
+
+def _run_ci_check(unique, root):
+    """CI gate: fail if unapproved packages are detected."""
+    approved_path = root / "approved.txt"
+    approved = set()
+    if approved_path.exists():
+        approved = {
+            ln.strip().lower()
+            for ln in approved_path.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.startswith("#")
+        }
+    detected = {resolve_name(m).lower() for m in unique}
+    unapproved = detected - approved
+    if unapproved:
+        print(f"\n  CI FAIL -- {len(unapproved)} unapproved package(s):")
+        for p in sorted(unapproved):
+            print(f"       {p}")
+        sys.exit(1)
+    else:
+        print("\n  CI PASS -- all packages approved.")
+
+
+def _run_health_checks(args, root, py_files, third_party, unique):
+    """Run health sub-commands (structure, junk, essentials, misplaced)."""
+    third_party_names = {resolve_name(m) for m in unique}
+    if args.health:
+        print_health_report(root, py_files, third_party, third_party_names)
+    else:
+        if getattr(args, 'check_structure', False):
+            report = analyze_structure(root)
+            print(f"\n  Structure Score: {report['score']}/100  ({report['grade']})")
+        if getattr(args, 'check_junk', False):
+            junk_files, junk_dirs = find_junk_files(root)
+            if junk_files or junk_dirs:
+                print(f"\n  Junk: {len(junk_files)} file(s), {len(junk_dirs)} cached dir(s)")
+                for f_name in junk_files[:10]:
+                    print(f"       {f_name}")
+            else:
+                print("\n  No junk files detected.")
+        if getattr(args, 'check_essentials', False):
+            present, missing = check_essentials(root, third_party_names)
+            if missing:
+                print(f"\n  Missing essentials: {len(missing)}")
+                for name, why, priority in missing:
+                    print(f"       [{priority}] {name}: {why}")
+            else:
+                print("\n  All essential files present.")
+        if getattr(args, 'check_misplaced', False):
+            misplaced = find_misplaced_files(root)
+            if misplaced:
+                print(f"\n  Misplaced files: {len(misplaced)}")
+                for fpath, desc, expected in misplaced[:10]:
+                    print(f"       {fpath} -> {expected}")
+            else:
+                print("\n  No misplaced files detected.")
+    if getattr(args, 'fix_gitignore', False):
+        generate_gitignore(root)
+
+
+def _run_optional_reports(args, unique, third_party, counter, root,
+                          py_files, import_locs):
+    """Run optional output reports (graph, stats, verbose, CI, health, etc.)."""
+    if args.graph:
+        write_graph(third_party, root)
+    if args.interactive_graph:
+        write_interactive_graph(third_party, root)
+
+    if args.stats:
+        print("\n  Package usage frequency:")
+        for mod, count in counter.most_common():
+            print(f"       {resolve_name(mod):30s} {count:4d} imports")
+
+    if args.verbose:
+        print(f"\n  Detailed import report ({len(unique)} packages):")
+        for mod in unique:
+            pkg = resolve_name(mod)
+            print(f"\n  {pkg}  ({counter[mod]} import{'s' if counter[mod]>1 else ''}):")
+            for fpath, lineno in third_party[mod]:
+                short = os.path.relpath(fpath, root)
+                print(f"    {short}:{lineno}")
+    elif args.summary:
+        print("\n  Third-party packages:")
+        for mod in unique:
+            pkg = resolve_name(mod)
+            ver = get_installed_version(pkg)
+            desc = LIB_DESCRIPTIONS.get(pkg, "")
+            ver_str = f"  v{ver}" if ver else "  (not installed)"
+            desc_str = f"  -- {desc}" if desc else ""
+            print(f"       {pkg:30s}{ver_str}{desc_str}")
+
+    if args.find_orphans:
+        orphans = find_orphans(root, py_files, import_locs, args.entrypoints)
+        if orphans:
+            print(f"\n  {len(orphans)} potentially orphaned file(s):")
+            for o in orphans:
+                short = os.path.relpath(o, root)
+                print(f"       {short}")
+        else:
+            print("\n  No orphaned files detected.")
+
+    if args.ci:
+        _run_ci_check(unique, root)
+    _run_health_checks(args, root, py_files, third_party, unique)
 
 
 # =============================================================================
@@ -1716,6 +1793,7 @@ def print_health_report(root, py_files, third_party, third_party_names):
 # =============================================================================
 
 def main():
+    """Entry point: parse arguments and run the dependency analysis pipeline."""
     args = parse_args()
     root = Path(args.path).resolve() if args.path else Path(__file__).parent.resolve()
 
@@ -1756,187 +1834,11 @@ def main():
               f"{', '.join(display)}"
               f"{'...' if len(local_modules) > 15 else ''}")
 
-
-    # -- Step 4: build output lines --
-    output_lines = []
-    
-    if args.format == "toml":
-        # pyproject.toml format
-        output_lines.append("[project.dependencies]")
-        for mod in unique:
-            pkg = resolve_name(mod)
-            ver = get_installed_version(pkg)
-            desc = LIB_DESCRIPTIONS.get(pkg)
-            
-            # Format: package = ">=1.0.0"
-            if ver and not args.no_pin:
-                ver_spec = f'">={ver}"'  # Using >= for toml usually safer than ==
-            else:
-                ver_spec = '"*"'
-            
-            comment = f"  # {desc}" if (desc and not args.no_descriptions) else ""
-            output_lines.append(f'{pkg} = {ver_spec}{comment}')
-            
-    else:
-        # requirements.txt format
-        output_lines = [
-            f"# Auto-generated by x_ray_project v{__version__}",
-            f"# Project: {root.name}",
-            f"# {len(unique)} third-party packages detected",
-            "",
-        ]
-        
-        req_only = []                    # for interactive / merge
-        not_installed = []
-
-        for mod in unique:
-            pkg = resolve_name(mod)
-            line = format_requirement(pkg, pin=not args.no_pin)
-            desc = LIB_DESCRIPTIONS.get(pkg)
-
-            if not args.no_descriptions and desc:
-                output_lines.append(f"# {desc}")
-            output_lines.append(line)
-            req_only.append(line)
-
-            if "==" not in line and not args.no_pin:
-                not_installed.append(pkg)
-
-        # -- Step 5: merge / interactive (TXT only) --
-        if args.merge:
-            merged = merge_with_existing(output_lines, args.merge)
-            output_lines = merged
-
-        if args.interactive:
-            req_only = interactive_review(req_only)
-            # Rebuild output_lines from surviving packages
-            output_lines = [
-                f"# Auto-generated by x_ray_project v{__version__}",
-                f"# Project: {root.name}", "",
-            ]
-            for line in req_only:
-                pkg = line.split("==")[0].strip()
-                desc = LIB_DESCRIPTIONS.get(pkg)
-                if not args.no_descriptions and desc:
-                    output_lines.append(f"# {desc}")
-                output_lines.append(line)
-
-    # -- Step 6: write output --
-    if args.output:
-        out_filename = args.output
-    else:
-        out_filename = "pyproject.toml" if args.format == "toml" else "requirements.txt"
-        
-    out_path = Path(out_filename)
-    if not out_path.is_absolute():
-        out_path = root / out_filename
-        
-    # Append mode for toml if merging? No, complex. Overwrite for now.
-    with open(out_path, "w", encoding="utf-8", newline="\n") as f:
-        for line in output_lines:
-            f.write(line + "\n")
-    print(f"\n  Written -> {out_path}  ({len(unique)} packages)")
-
-    if args.format == "txt" and 'not_installed' in locals() and not_installed:
-        print(f"  WARNING: {len(not_installed)} package(s) not installed locally (no version pin):")
-        for p in not_installed:
-            print(f"       - {p}")
-
-    # -- Optional outputs --
-    if args.graph:
-        write_graph(third_party, root)
-        
-    if args.interactive_graph:
-        write_interactive_graph(third_party, root)
-
-    if args.stats:
-        print("\n  Package usage frequency:")
-        for mod, count in counter.most_common():
-            print(f"       {resolve_name(mod):30s} {count:4d} imports")
-
-    if args.verbose:
-        print(f"\n  Detailed import report ({len(unique)} packages):")
-        for mod in unique:
-            pkg = resolve_name(mod)
-            print(f"\n  {pkg}  ({counter[mod]} import{'s' if counter[mod]>1 else ''}):")
-            for fpath, lineno in third_party[mod]:
-                short = os.path.relpath(fpath, root)
-                print(f"    {short}:{lineno}")
-    elif args.summary:
-        print(f"\n  Third-party packages:")
-        for mod in unique:
-            pkg = resolve_name(mod)
-            ver = get_installed_version(pkg)
-            desc = LIB_DESCRIPTIONS.get(pkg, "")
-            ver_str = f"  v{ver}" if ver else "  (not installed)"
-            desc_str = f"  -- {desc}" if desc else ""
-            print(f"       {pkg:30s}{ver_str}{desc_str}")
-
-    # -- Orphan detection --
-    if args.find_orphans:
-        orphans = find_orphans(root, py_files, import_locs, args.entrypoints)
-        if orphans:
-            print(f"\n  {len(orphans)} potentially orphaned file(s):")
-            for o in orphans:
-                short = os.path.relpath(o, root)
-                print(f"       {short}")
-        else:
-            print("\n  No orphaned files detected.")
-
-    # -- CI mode --
-    if args.ci:
-        approved_path = root / "approved.txt"
-        approved = set()
-        if approved_path.exists():
-            approved = {
-                l.strip().lower()
-                for l in approved_path.read_text(encoding="utf-8").splitlines()
-                if l.strip() and not l.startswith("#")
-            }
-        detected = {resolve_name(m).lower() for m in unique}
-        unapproved = detected - approved
-        if unapproved:
-            print(f"\n  CI FAIL -- {len(unapproved)} unapproved package(s):")
-            for p in sorted(unapproved):
-                print(f"       {p}")
-            sys.exit(1)
-        else:
-            print("\n  CI PASS -- all packages approved.")
-
-    # -- Health checks --
-    third_party_names = {resolve_name(m) for m in unique}
-    if args.health:
-        print_health_report(root, py_files, third_party, third_party_names)
-    else:
-        if getattr(args, 'check_structure', False):
-            report = analyze_structure(root)
-            print(f"\n  Structure Score: {report['score']}/100  ({report['grade']})")
-        if getattr(args, 'check_junk', False):
-            junk_files, junk_dirs = find_junk_files(root)
-            if junk_files or junk_dirs:
-                print(f"\n  Junk: {len(junk_files)} file(s), {len(junk_dirs)} cached dir(s)")
-                for f_name in junk_files[:10]:
-                    print(f"       {f_name}")
-            else:
-                print("\n  No junk files detected.")
-        if getattr(args, 'check_essentials', False):
-            present, missing = check_essentials(root, third_party_names)
-            if missing:
-                print(f"\n  Missing essentials: {len(missing)}")
-                for name, why, priority in missing:
-                    print(f"       [{priority}] {name}: {why}")
-            else:
-                print("\n  All essential files present.")
-        if getattr(args, 'check_misplaced', False):
-            misplaced = find_misplaced_files(root)
-            if misplaced:
-                print(f"\n  Misplaced files: {len(misplaced)}")
-                for fpath, desc, expected in misplaced[:10]:
-                    print(f"       {fpath} -> {expected}")
-            else:
-                print("\n  No misplaced files detected.")
-    if getattr(args, 'fix_gitignore', False):
-        generate_gitignore(root)
+    # -- Steps 4-6: build, write, report --
+    output_lines, not_installed = _build_output_lines(args, unique, root)
+    _write_output(args, output_lines, unique, root, not_installed)
+    _run_optional_reports(args, unique, third_party, counter, root,
+                          py_files, import_locs)
 
     print(f"\n{'='*60}\n")
 

@@ -52,6 +52,34 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
-# ── Archives ─────────────────────────────────────
+# ── Archives / Old ───────────────────────────────
 _archive/
 Old/
+_OLD/
+*.old
+
+# ── Generated / Junk ────────────────────────────
+import_graph.html
+import_graph.dot
+*.py.txt
+scan_cache.json
+*.db-journal
+fingerprint_cache.db
+
+# ── Environment / Secrets ────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── X-Ray outputs ───────────────────────────────
+xray_*.json
+*_report.json
+
+# Added by cleanup
+*.pyc
+.ruff_cache/
+
+# Added by cleanup
+*.pyc
+.ruff_cache/
+
