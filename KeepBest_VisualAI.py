@@ -24,10 +24,10 @@ import sys  # noqa: E402
 import io  # noqa: E402
 
 # Fix Windows console Unicode output FIRST
-if sys.platform == 'win32':
+if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
     except Exception:
         pass
 
@@ -61,32 +61,38 @@ from queue import Queue, Empty  # noqa: E402
 # -----------------------------------------------------------------------------
 PRINT_LOCK = threading.Lock()
 
+
 def safe_print(*args, **kwargs) -> None:
     """Thread-safe print with Unicode error handling."""
     with PRINT_LOCK:
         try:
             print(*args, **kwargs)
         except UnicodeEncodeError:
-            text = ' '.join(str(a) for a in args)
-            print(text.encode('ascii', errors='replace').decode('ascii'), **kwargs)
+            text = " ".join(str(a) for a in args)
+            print(text.encode("ascii", errors="replace").decode("ascii"), **kwargs)
         sys.stdout.flush()
+
 
 def format_file_size(size_bytes: int) -> str:
     """Format file size."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f}{unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f}TB"
+    size = float(size_bytes)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size < 1024:
+            return f"{size:.1f}{unit}"
+        size /= 1024
+    return f"{size:.1f}TB"
+
 
 def truncate_path(path: Path, max_len: int = 50) -> str:
     """Truncate path for display, keeping end visible."""
     s = str(path)
-    return s if len(s) <= max_len else "..." + s[-(max_len - 3):]
+    return s if len(s) <= max_len else "..." + s[-(max_len - 3) :]
+
 
 # -----------------------------------------------------------------------------
 # Dependency Management (SIMPLIFIED: 4 methods -> 1)
 # -----------------------------------------------------------------------------
+
 
 class DependencyManager:
     """Manages optional dependencies with single unified check method."""
@@ -101,7 +107,7 @@ class DependencyManager:
             return False
 
     @staticmethod
-    def try_install(package_name: str, import_name: str = None) -> bool:
+    def try_install(package_name: str, import_name: Optional[str] = None) -> bool:
         """Attempt to pip-install a package if not already available."""
         if import_name is None:
             import_name = package_name
@@ -111,7 +117,8 @@ class DependencyManager:
         try:
             subprocess.check_call(
                 [sys.executable, "-m", "pip", "install", package_name, "--quiet"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             safe_print(f"OK {package_name} installed successfully")
             return True
@@ -119,19 +126,37 @@ class DependencyManager:
             safe_print(f"FAIL Failed to install {package_name}: {e}")
             return False
 
+
 # Dependency initialization
-HAS_NUMPY = DependencyManager.check_import("numpy") or DependencyManager.try_install("numpy")
-HAS_VLC = DependencyManager.check_import("vlc") or DependencyManager.try_install("python-vlc", "vlc")
-HAS_TQDM = DependencyManager.check_import("tqdm") or DependencyManager.try_install("tqdm")
-HAS_PILLOW = DependencyManager.check_import("PIL") or DependencyManager.try_install("Pillow", "PIL")
+HAS_NUMPY = DependencyManager.check_import("numpy") or DependencyManager.try_install(
+    "numpy"
+)
+HAS_VLC = DependencyManager.check_import("vlc") or DependencyManager.try_install(
+    "python-vlc", "vlc"
+)
+HAS_TQDM = DependencyManager.check_import("tqdm") or DependencyManager.try_install(
+    "tqdm"
+)
+HAS_PILLOW = DependencyManager.check_import("PIL") or DependencyManager.try_install(
+    "Pillow", "PIL"
+)
 
 if HAS_NUMPY:
     import numpy as np
+else:
+    import types as _types
+
+    np = _types.ModuleType("numpy")  # type: ignore[assignment]
 if HAS_VLC:
     import vlc
+else:
+    import types as _types
+
+    vlc = _types.ModuleType("vlc")  # type: ignore[assignment]
 if HAS_TQDM:
     from tqdm.asyncio import tqdm_asyncio
 else:
+
     class tqdm_asyncio:
         """Fallback when tqdm is not installed."""
 
@@ -139,12 +164,20 @@ else:
         async def gather(*args, **kwargs):
             """Delegate to asyncio.gather without progress display."""
             return await asyncio.gather(*args)
+
+
 if HAS_PILLOW:
     from PIL import Image, ImageTk
+else:
+    import types as _types
+
+    Image = _types.ModuleType("PIL.Image")  # type: ignore[assignment]
+    ImageTk = _types.ModuleType("PIL.ImageTk")  # type: ignore[assignment]
 
 # -----------------------------------------------------------------------------
 # Configuration & Constants (CONSOLIDATED)
 # -----------------------------------------------------------------------------
+
 
 class Constants:
     STRICT_TIMEOUT = 15.0
@@ -158,25 +191,31 @@ class Constants:
     PHASH_DCT_SIZE = 8
     DURATION_TOLERANCE_PERCENT = 0.05
     DEFAULT_MAX_WORKERS = 4
-    EFFICIENT_CODECS = {'hevc', 'av1', 'vp9'}
+    EFFICIENT_CODECS = {"hevc", "av1", "vp9"}
     CODEC_EFFICIENCY_MULTIPLIER = 1.5
     AUDIO_CHANNEL_NAMES = {6: "5.1", 8: "7.1"}
 
     TV_PATTERNS = [
-        re.compile(r'^(?P<show_title>.*?)(?:[\s\._]*)(?:[Ss](?:eason)?[\s\._-]*?(?P<season>\d{1,2}))(?:[\s\._-]*(?:[EeXx](?:pisode)?[\s\._-]*?(?P<episode>\d{1,3})))(?P<remaining_title>.*)', re.IGNORECASE),
-        re.compile(r'^(?P<show_title>.*?)(?:[\s\._]*)(?:(?P<season>\d{1,2})[xX](?P<episode>\d{1,3}))(?P<remaining_title>.*)', re.IGNORECASE),
+        re.compile(
+            r"^(?P<show_title>.*?)(?:[\s\._]*)(?:[Ss](?:eason)?[\s\._-]*?(?P<season>\d{1,2}))(?:[\s\._-]*(?:[EeXx](?:pisode)?[\s\._-]*?(?P<episode>\d{1,3})))(?P<remaining_title>.*)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^(?P<show_title>.*?)(?:[\s\._]*)(?:(?P<season>\d{1,2})[xX](?P<episode>\d{1,3}))(?P<remaining_title>.*)",
+            re.IGNORECASE,
+        ),
     ]
 
     # CONSOLIDATED: Codec ranking (was duplicated in 2 places)
-    CODEC_RANK = {'av1': 3, 'hevc': 2, 'h265': 2, 'vp9': 2, 'h264': 1, 'avc': 1}
+    CODEC_RANK = {"av1": 3, "hevc": 2, "h265": 2, "vp9": 2, "h264": 1, "avc": 1}
 
     # CONSOLIDATED: Font definitions
     FONTS = {
-        'title': ("Segoe UI", 10, "bold"),
-        'info': ("Segoe UI", 8),
-        'folder': ("Segoe UI", 9),  # Slightly larger for folder paths
-        'mono': ("Consolas", 9),
-        'mono_bold': ("Consolas", 9, "bold"),
+        "title": ("Segoe UI", 10, "bold"),
+        "info": ("Segoe UI", 8),
+        "folder": ("Segoe UI", 9),  # Slightly larger for folder paths
+        "mono": ("Consolas", 9),
+        "mono_bold": ("Consolas", 9, "bold"),
     }
 
     # UI Colors
@@ -186,6 +225,7 @@ class Constants:
     COLOR_WORSE = "#ff6666"
     COLOR_BG = "#252526"
     COLOR_BG_DARK = "#1e1e1e"
+
 
 @dataclass
 class Config:
@@ -200,16 +240,20 @@ class Config:
     verbose: bool
     cache_db_path: Path
 
+
 # -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
 
-def setup_logging(log_file: Optional[Path] = None, verbose: bool = False) -> logging.Logger:
+
+def setup_logging(
+    log_file: Optional[Path] = None, verbose: bool = False
+) -> logging.Logger:
     """Configure and return the application logger."""
     logger = logging.getLogger("VisualAI")
     logger.setLevel(logging.DEBUG if verbose else logging.INFO)
     logger.handlers = []
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)
     logger.addHandler(ch)
@@ -223,9 +267,11 @@ def setup_logging(log_file: Optional[Path] = None, verbose: bool = False) -> log
             safe_print(f"Warning: Could not create log file: {e}")
     return logger
 
+
 # -----------------------------------------------------------------------------
 # Caching System
 # -----------------------------------------------------------------------------
+
 
 class MetadataCache:
     """SQLite-based cache for file metadata and fingerprints."""
@@ -294,18 +340,22 @@ class MetadataCache:
     def _get_meta(self, key: str) -> Optional[str]:
         """Retrieve a value from the db_info metadata table."""
         try:
-            cur = self.conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_info'")
+            cur = self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='db_info'"
+            )
             if not cur.fetchone():
                 return None
             cur = self.conn.execute("SELECT value FROM db_info WHERE key = ?", (key,))
             row = cur.fetchone()
-            return row['value'] if row else None
+            return row["value"] if row else None
         except Exception:
             return None
 
     def _set_meta(self, key: str, value: str):
         """Insert or update a key-value pair in the db_info table."""
-        self.conn.execute("INSERT OR REPLACE INTO db_info (key, value) VALUES (?, ?)", (key, value))
+        self.conn.execute(
+            "INSERT OR REPLACE INTO db_info (key, value) VALUES (?, ?)", (key, value)
+        )
 
     def get(self, path: Path) -> Optional[Dict]:
         """Return cached metadata and fingerprint for *path*, or None."""
@@ -316,15 +366,22 @@ class MetadataCache:
                 stat = path.stat()
                 cur = self.conn.execute(
                     "SELECT metadata_json, fingerprint_json FROM file_cache WHERE path = ? AND size = ? AND mtime = ?",
-                    (str(path), stat.st_size, stat.st_mtime)
+                    (str(path), stat.st_size, stat.st_mtime),
                 )
                 row = cur.fetchone()
                 if row:
-                    meta = json.loads(row['metadata_json'])
-                    fp = json.loads(row['fingerprint_json']) if row['fingerprint_json'] else None
-                    self.conn.execute("UPDATE file_cache SET last_seen = ? WHERE path = ?", (time.time(), str(path)))
+                    meta = json.loads(row["metadata_json"])
+                    fp = (
+                        json.loads(row["fingerprint_json"])
+                        if row["fingerprint_json"]
+                        else None
+                    )
+                    self.conn.execute(
+                        "UPDATE file_cache SET last_seen = ? WHERE path = ?",
+                        (time.time(), str(path)),
+                    )
                     self.conn.commit()
-                    return {'meta': meta, 'fingerprint': fp}
+                    return {"meta": meta, "fingerprint": fp}
             except Exception:
                 pass
         return None
@@ -341,7 +398,13 @@ class MetadataCache:
             with self._lock:
                 self.conn.commit()
 
-    def set(self, path: Path, meta: Dict, fingerprint: Optional[List[int]], commit: bool = True):
+    def set(
+        self,
+        path: Path,
+        meta: Dict,
+        fingerprint: Optional[List[int]],
+        commit: bool = True,
+    ):
         """Store metadata and optional fingerprint for *path* in the cache."""
         if not self.conn:
             return
@@ -351,8 +414,14 @@ class MetadataCache:
                 self.conn.execute(
                     """INSERT OR REPLACE INTO file_cache (path, size, mtime, metadata_json, fingerprint_json, last_seen)
                        VALUES (?, ?, ?, ?, ?, ?)""",
-                    (str(path), stat.st_size, stat.st_mtime, json.dumps(meta),
-                     json.dumps(fingerprint) if fingerprint else None, time.time())
+                    (
+                        str(path),
+                        stat.st_size,
+                        stat.st_mtime,
+                        json.dumps(meta),
+                        json.dumps(fingerprint) if fingerprint else None,
+                        time.time(),
+                    ),
                 )
                 if commit:
                     self.conn.commit()
@@ -368,9 +437,11 @@ class MetadataCache:
         if self.conn:
             self.conn.close()
 
+
 # -----------------------------------------------------------------------------
 # Process Management
 # -----------------------------------------------------------------------------
+
 
 class ProcessManager:
     """Manages subprocess lifecycle and cleanup."""
@@ -405,35 +476,55 @@ class ProcessManager:
                 except Exception:
                     pass
 
-    async def run_command(self, cmd: List[str], timeout: float, binary_output: bool = False) -> Tuple[int, Any, Any]:
+    async def run_command(
+        self, cmd: List[str], timeout: float, binary_output: bool = False
+    ) -> Tuple[int, Any, Any]:
         """Run a command asynchronously with timeout, returning (returncode, stdout, stderr)."""
         proc = None
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if platform.system() == "Windows" else 0
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                if platform.system() == "Windows"
+                else 0,
             )
             self.register(proc)
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             if binary_output:
                 return proc.returncode, stdout, stderr
-            return proc.returncode, stdout.decode(errors='ignore'), stderr.decode(errors='ignore')
+            return (
+                proc.returncode,
+                stdout.decode(errors="ignore"),
+                stderr.decode(errors="ignore"),
+            )
         except asyncio.TimeoutError:
             if proc:
                 try:
                     proc.kill()
                 except Exception:
                     pass
-            return -1, b"" if binary_output else "", b"Timeout" if binary_output else "Timeout"
+            return (
+                -1,
+                b"" if binary_output else "",
+                b"Timeout" if binary_output else "Timeout",
+            )
         except Exception as e:
-            return -1, b"" if binary_output else "", str(e).encode() if binary_output else str(e)
+            return (
+                -1,
+                b"" if binary_output else "",
+                str(e).encode() if binary_output else str(e),
+            )
         finally:
             if proc:
                 self.unregister(proc)
 
+
 # -----------------------------------------------------------------------------
 # Data Structures (MediaFile with to_meta_dict)
 # -----------------------------------------------------------------------------
+
 
 @dataclass
 class MediaFile:
@@ -463,12 +554,12 @@ class MediaFile:
     @property
     def created_str(self) -> str:
         """Human-readable creation date."""
-        return datetime.fromtimestamp(self.created).strftime('%Y-%m-%d')
+        return datetime.fromtimestamp(self.created).strftime("%Y-%m-%d")
 
     @property
     def modified_str(self) -> str:
         """Human-readable modification date."""
-        return datetime.fromtimestamp(self.modified).strftime('%Y-%m-%d')
+        return datetime.fromtimestamp(self.modified).strftime("%Y-%m-%d")
 
     @property
     def resolution_str(self) -> str:
@@ -498,26 +589,44 @@ class MediaFile:
     def to_meta_dict(self) -> Dict:
         """Serialize media attributes to a dict for cache storage."""
         return {
-            'width': self.width, 'height': self.height, 'duration': self.duration,
-            'bitrate': self.bitrate, 'video_codec': self.video_codec, 'bit_depth': self.bit_depth,
-            'audio_channels': self.audio_channels, 'audio_codec': self.audio_codec,
-            'audio_streams_count': self.audio_streams_count, 'bpp': self.bpp,
-            'subs_count': self.subs_count, 'is_hdr': self.is_hdr, 'is_dolby_vision': self.is_dolby_vision
+            "width": self.width,
+            "height": self.height,
+            "duration": self.duration,
+            "bitrate": self.bitrate,
+            "video_codec": self.video_codec,
+            "bit_depth": self.bit_depth,
+            "audio_channels": self.audio_channels,
+            "audio_codec": self.audio_codec,
+            "audio_streams_count": self.audio_streams_count,
+            "bpp": self.bpp,
+            "subs_count": self.subs_count,
+            "is_hdr": self.is_hdr,
+            "is_dolby_vision": self.is_dolby_vision,
         }
+
 
 # -----------------------------------------------------------------------------
 # Core Logic
 # -----------------------------------------------------------------------------
 
+
 class FingerprintGenerator:
     """Handles visual fingerprinting and pHash computation."""
 
-    def __init__(self, process_mgr: ProcessManager, ffmpeg_bin: str, logger: logging.Logger, max_workers: int):
+    def __init__(
+        self,
+        process_mgr: ProcessManager,
+        ffmpeg_bin: str,
+        logger: logging.Logger,
+        max_workers: int,
+    ):
         """Initialize the fingerprint generator with FFmpeg and thread pool."""
         self.pm = process_mgr
         self.ffmpeg_bin = ffmpeg_bin
         self.logger = logger
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(os.cpu_count() or 4, max_workers))
+        self.executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(os.cpu_count() or 4, max_workers)
+        )
 
     def _dct_2d(self, matrix_8x8: Any) -> Any:
         """Compute a 2-D DCT on an 8x8 block for perceptual hashing."""
@@ -531,7 +640,9 @@ class FingerprintGenerator:
             c[0] = 1.0 / np.sqrt(2)
             for u_idx in range(N):
                 for v_idx in range(N):
-                    sum_val = np.sum(matrix_8x8 * np.outer(cos_table[:, u_idx], cos_table[:, v_idx]))
+                    sum_val = np.sum(
+                        matrix_8x8 * np.outer(cos_table[:, u_idx], cos_table[:, v_idx])
+                    )
                     dct[u_idx, v_idx] = 0.25 * c[u_idx] * c[v_idx] * sum_val
             return dct
         return np.zeros((8, 8))
@@ -547,10 +658,18 @@ class FingerprintGenerator:
             block_size = size // 8
             for y in range(8):
                 for x in range(8):
-                    block = img[y * block_size:(y + 1) * block_size, x * block_size:(x + 1) * block_size]
+                    block = img[
+                        y * block_size : (y + 1) * block_size,
+                        x * block_size : (x + 1) * block_size,
+                    ]
                     matrix_8x8[y, x] = np.mean(block)
             dct_vals = self._dct_2d(matrix_8x8)
-            vals = [dct_vals[y, x] for y in range(8) for x in range(8) if not (x == 0 and y == 0)]
+            vals = [
+                dct_vals[y, x]
+                for y in range(8)
+                for x in range(8)
+                if not (x == 0 and y == 0)
+            ]
             median = np.median(vals)
             hash_val = 0
             for y in range(8):
@@ -564,7 +683,10 @@ class FingerprintGenerator:
         chunk_size = Constants.FINGERPRINT_SIZE * Constants.FINGERPRINT_SIZE
         if len(buffer) != 3 * chunk_size:
             return []
-        return [self._compute_single_hash(buffer[i * chunk_size:(i + 1) * chunk_size]) for i in range(3)]
+        return [
+            self._compute_single_hash(buffer[i * chunk_size : (i + 1) * chunk_size])
+            for i in range(3)
+        ]
 
     async def generate(self, path: Path, duration: float) -> Optional[List[int]]:
         """Generate visual fingerprint hashes for a video file."""
@@ -572,21 +694,42 @@ class FingerprintGenerator:
             return None
         ts = [duration * p for p in Constants.FINGERPRINT_TIMESTAMPS]
         cmd = [
-            self.ffmpeg_bin, "-y", "-hide_banner", "-loglevel", "error",
-            "-ss", f"{ts[0]:.2f}", "-i", str(path),
-            "-ss", f"{ts[1]:.2f}", "-i", str(path),
-            "-ss", f"{ts[2]:.2f}", "-i", str(path),
+            self.ffmpeg_bin,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            f"{ts[0]:.2f}",
+            "-i",
+            str(path),
+            "-ss",
+            f"{ts[1]:.2f}",
+            "-i",
+            str(path),
+            "-ss",
+            f"{ts[2]:.2f}",
+            "-i",
+            str(path),
             "-filter_complex",
             f"[0:v]scale={Constants.FINGERPRINT_SIZE}:{Constants.FINGERPRINT_SIZE},format=gray[v0];"
             f"[1:v]scale={Constants.FINGERPRINT_SIZE}:{Constants.FINGERPRINT_SIZE},format=gray[v1];"
             f"[2:v]scale={Constants.FINGERPRINT_SIZE}:{Constants.FINGERPRINT_SIZE},format=gray[v2];"
             f"[v0][v1][v2]hstack=inputs=3",
-            "-vframes", "1", "-f", "rawvideo", "-"
+            "-vframes",
+            "1",
+            "-f",
+            "rawvideo",
+            "-",
         ]
-        rc, out, _ = await self.pm.run_command(cmd, Constants.FINGERPRINT_TIMEOUT, binary_output=True)
+        rc, out, _ = await self.pm.run_command(
+            cmd, Constants.FINGERPRINT_TIMEOUT, binary_output=True
+        )
         if rc == 0 and len(out) == Constants.FINGERPRINT_BUFFER_SIZE:
             loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(self.executor, self._compute_hashes_from_buffer, out)
+            return await loop.run_in_executor(
+                self.executor, self._compute_hashes_from_buffer, out
+            )
         return None
 
     def shutdown(self):
@@ -597,7 +740,13 @@ class FingerprintGenerator:
 class MediaScanner:
     """Handles file scanning and metadata extraction."""
 
-    def __init__(self, config: Config, process_mgr: ProcessManager, logger: logging.Logger, cache: MetadataCache):
+    def __init__(
+        self,
+        config: Config,
+        process_mgr: ProcessManager,
+        logger: logging.Logger,
+        cache: MetadataCache,
+    ):
         """Initialize the scanner with configuration and backend services."""
         self.config = config
         self.pm = process_mgr
@@ -605,7 +754,9 @@ class MediaScanner:
         self.cache = cache
         self.ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
         self.ffprobe_bin = shutil.which("ffprobe") or "ffprobe"
-        self.non_movie_regexes = [re.compile(rf'\b{kw}\b', re.IGNORECASE) for kw in config.exclude_keywords]
+        self.non_movie_regexes = [
+            re.compile(rf"\b{kw}\b", re.IGNORECASE) for kw in config.exclude_keywords
+        ]
 
     async def check_binaries(self) -> None:
         """Verify that FFprobe is available and working."""
@@ -616,14 +767,14 @@ class MediaScanner:
     def _parse_filename(self, path: Path) -> Tuple[str, str, str]:
         """Extract (title, content_type, episode_info) from a filename."""
         name = path.stem
-        clean = re.sub(r'[\._]', ' ', name)
-        ctype, title, extra = 'movie', clean, "0"
+        clean = re.sub(r"[\._]", " ", name)
+        ctype, title, extra = "movie", clean, "0"
         for pat in Constants.TV_PATTERNS:
             match = pat.search(clean)
             if match:
-                ctype = 'tv'
-                title = match.group('show_title') or clean
-                s, e = match.group('season'), match.group('episode')
+                ctype = "tv"
+                title = match.group("show_title") or clean
+                s, e = match.group("season"), match.group("episode")
                 if s and e:
                     extra = f"S{int(s):02d}E{int(e):02d}"
                 break
@@ -635,7 +786,10 @@ class MediaScanner:
         is_hdr, is_dv = False, False
         color_transfer = vid.get("color_transfer", "")
         color_primaries = vid.get("color_primaries", "")
-        if color_transfer in ("smpte2084", "arib-std-b67") or color_primaries == "bt2020":
+        if (
+            color_transfer in ("smpte2084", "arib-std-b67")
+            or color_primaries == "bt2020"
+        ):
             is_hdr = True
         for side_data in vid.get("side_data_list", []):
             if "dovi" in str(side_data).lower() or "dolby" in str(side_data).lower():
@@ -645,14 +799,26 @@ class MediaScanner:
 
     async def _get_metadata(self, path: Path) -> Optional[Dict]:
         """Probe a media file with FFprobe and return parsed metadata."""
-        cmd = [self.ffprobe_bin, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)]
+        cmd = [
+            self.ffprobe_bin,
+            "-v",
+            "error",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            str(path),
+        ]
         rc, out, _ = await self.pm.run_command(cmd, Constants.STRICT_TIMEOUT)
         if rc != 0 or not out:
             return None
 
         try:
             data = json.loads(out)
-            vid = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), None)
+            vid = next(
+                (s for s in data.get("streams", []) if s.get("codec_type") == "video"),
+                None,
+            )
             if not vid:
                 return None
             fmt = data.get("format", {})
@@ -664,41 +830,64 @@ class MediaScanner:
                 bitrate = (path.stat().st_size * 8) / duration
 
             try:
-                n, d = map(float, vid.get("avg_frame_rate", "0/0").split('/'))
+                n, d = map(float, vid.get("avg_frame_rate", "0/0").split("/"))
                 fps = n / d if d > 0 else 0
             except (ValueError, ZeroDivisionError):
                 fps = 0
             bpp = bitrate / (width * height * fps) if (width * height * fps) > 0 else 0
 
-            auds = [s for s in data.get("streams", []) if s.get("codec_type") == "audio"]
+            auds = [
+                s for s in data.get("streams", []) if s.get("codec_type") == "audio"
+            ]
             best_aud = max(auds, key=lambda x: int(x.get("channels", 0)), default={})
             is_hdr, is_dv = self._detect_hdr(vid)
 
             return {
-                "width": width, "height": height, "duration": duration,
-                "bitrate": bitrate, "video_codec": vid.get("codec_name", "unknown"),
-                "bit_depth": int(vid.get("bits_per_raw_sample", 8)) if vid.get("bits_per_raw_sample", "").isdigit() else 8,
+                "width": width,
+                "height": height,
+                "duration": duration,
+                "bitrate": bitrate,
+                "video_codec": vid.get("codec_name", "unknown"),
+                "bit_depth": int(vid.get("bits_per_raw_sample", 8))
+                if vid.get("bits_per_raw_sample", "").isdigit()
+                else 8,
                 "audio_channels": int(best_aud.get("channels", 0)),
                 "audio_codec": best_aud.get("codec_name", "unknown"),
-                "audio_streams_count": len(auds), "bpp": bpp,
-                "subs_count": len([s for s in data.get("streams", []) if s.get("codec_type") == "subtitle"]),
-                "is_hdr": is_hdr, "is_dolby_vision": is_dv
+                "audio_streams_count": len(auds),
+                "bpp": bpp,
+                "subs_count": len(
+                    [
+                        s
+                        for s in data.get("streams", [])
+                        if s.get("codec_type") == "subtitle"
+                    ]
+                ),
+                "is_hdr": is_hdr,
+                "is_dolby_vision": is_dv,
             }
         except Exception:
             return None
 
-    def _build_media_file(self, path: Path, meta: Dict, hashes: Optional[List[int]]) -> MediaFile:
+    def _build_media_file(
+        self, path: Path, meta: Dict, hashes: Optional[List[int]]
+    ) -> MediaFile:
         """Construct a MediaFile from path, metadata dict, and optional hashes."""
         title, ctype, extra = self._parse_filename(path)
-        codec_mult = Constants.CODEC_EFFICIENCY_MULTIPLIER if meta['video_codec'] in Constants.EFFICIENT_CODECS else 1.0
-        quality_score = (meta['bitrate'] * codec_mult) / max(1.0, meta['duration'])
-        hdr_bonus = 2000 if meta.get('is_dolby_vision') else (1000 if meta.get('is_hdr') else 0)
+        codec_mult = (
+            Constants.CODEC_EFFICIENCY_MULTIPLIER
+            if meta["video_codec"] in Constants.EFFICIENT_CODECS
+            else 1.0
+        )
+        quality_score = (meta["bitrate"] * codec_mult) / max(1.0, meta["duration"])
+        hdr_bonus = (
+            2000 if meta.get("is_dolby_vision") else (1000 if meta.get("is_hdr") else 0)
+        )
 
         score = (
-            meta['width'] * meta['height'],
-            hdr_bonus + (1000 if meta['bit_depth'] >= 10 else 0),
-            meta['audio_channels'] * 100,
-            quality_score
+            meta["width"] * meta["height"],
+            hdr_bonus + (1000 if meta["bit_depth"] >= 10 else 0),
+            meta["audio_channels"] * 100,
+            quality_score,
         )
 
         try:
@@ -708,16 +897,28 @@ class MediaScanner:
             created = modified = 0
 
         return MediaFile(
-            path=path, name=path.name, size=path.stat().st_size,
-            content_type=ctype, title=title,
-            width=meta['width'], height=meta['height'], duration=meta['duration'],
-            bitrate=meta['bitrate'], video_codec=meta['video_codec'],
-            bit_depth=meta['bit_depth'], audio_channels=meta['audio_channels'],
-            audio_codec=meta['audio_codec'], audio_streams_count=meta.get('audio_streams_count', 1),
-            bpp=meta['bpp'], subs_count=meta['subs_count'],
-            visual_hashes=hashes, sort_score=score,
-            created=created, modified=modified,
-            is_hdr=meta.get('is_hdr', False), is_dolby_vision=meta.get('is_dolby_vision', False)
+            path=path,
+            name=path.name,
+            size=path.stat().st_size,
+            content_type=ctype,
+            title=title,
+            width=meta["width"],
+            height=meta["height"],
+            duration=meta["duration"],
+            bitrate=meta["bitrate"],
+            video_codec=meta["video_codec"],
+            bit_depth=meta["bit_depth"],
+            audio_channels=meta["audio_channels"],
+            audio_codec=meta["audio_codec"],
+            audio_streams_count=meta.get("audio_streams_count", 1),
+            bpp=meta["bpp"],
+            subs_count=meta["subs_count"],
+            visual_hashes=hashes,
+            sort_score=score,
+            created=created,
+            modified=modified,
+            is_hdr=meta.get("is_hdr", False),
+            is_dolby_vision=meta.get("is_dolby_vision", False),
         )
 
     async def scan(self) -> Dict[Tuple, List[MediaFile]]:
@@ -734,7 +935,9 @@ class MediaScanner:
                     if not any(r.search(path.name) for r in self.non_movie_regexes):
                         files_to_scan.append(path)
                         if len(files_to_scan) % 50 == 0:
-                            safe_print(f"\r  Found {len(files_to_scan)} files...", end="")
+                            safe_print(
+                                f"\r  Found {len(files_to_scan)} files...", end=""
+                            )
 
         print()
         safe_print(f"--- Phase 2: Analyzing {len(files_to_scan)} Files ---")
@@ -749,7 +952,9 @@ class MediaScanner:
                 if not path.exists():
                     return
                 cached = self.cache.get(path)
-                meta, hashes = (cached['meta'], cached['fingerprint']) if cached else (None, None)
+                meta, hashes = (
+                    (cached["meta"], cached["fingerprint"]) if cached else (None, None)
+                )
                 if not meta:
                     meta = await self._get_metadata(path)
                     if meta:
@@ -758,7 +963,9 @@ class MediaScanner:
                     return
 
                 mf = self._build_media_file(path, meta, hashes)
-                groups[(mf.content_type, mf.title, self._parse_filename(path)[2])].append(mf)
+                groups[
+                    (mf.content_type, mf.title, self._parse_filename(path)[2])
+                ].append(mf)
 
         tasks = [_process(p) for p in files_to_scan]
         if HAS_TQDM:
@@ -769,15 +976,23 @@ class MediaScanner:
         self.cache.commit_transaction()
         return groups
 
+
 # -----------------------------------------------------------------------------
 # Background Fingerprinting (SIMPLIFIED)
 # -----------------------------------------------------------------------------
 
+
 class BackgroundFingerprinter:
     """Runs fingerprinting in background while UI is active."""
 
-    def __init__(self, fingerprinter: FingerprintGenerator, cache: MetadataCache,
-                 candidates: List[MediaFile], pairs: List[Tuple], on_match: Callable):
+    def __init__(
+        self,
+        fingerprinter: FingerprintGenerator,
+        cache: MetadataCache,
+        candidates: List[MediaFile],
+        pairs: List[Tuple],
+        on_match: Callable,
+    ):
         """Set up background fingerprinting for the given candidates."""
         self.fingerprinter = fingerprinter
         self.cache = cache
@@ -817,23 +1032,39 @@ class BackgroundFingerprinter:
         for i in range(0, len(self.candidates), batch_size):
             if not self.running:
                 break
-            await asyncio.gather(*[_gen_fp(f) for f in self.candidates[i:i + batch_size]])
+            await asyncio.gather(
+                *[_gen_fp(f) for f in self.candidates[i : i + batch_size]]
+            )
             # Check for matches using unified hamming_distance
             for f1, f2 in self.pairs:
                 if f1.visual_hashes and f2.visual_hashes:
-                    matches = sum(1 for k in range(3)
-                                  if DuplicateDetector.hamming_distance(f1.visual_hashes[k], f2.visual_hashes[k]) <= Constants.VISUAL_MATCH_THRESHOLD)
+                    matches = sum(
+                        1
+                        for k in range(3)
+                        if DuplicateDetector.hamming_distance(
+                            f1.visual_hashes[k], f2.visual_hashes[k]
+                        )
+                        <= Constants.VISUAL_MATCH_THRESHOLD
+                    )
                     if matches >= 2:
                         self.on_match(f1, f2)
+
 
 # -----------------------------------------------------------------------------
 # Duplicate Detection & UI
 # -----------------------------------------------------------------------------
 
+
 class DuplicateDetector:
     """Handles duplicate detection and user interaction."""
 
-    def __init__(self, config: Config, logger: logging.Logger, cache: MetadataCache, fingerprinter: FingerprintGenerator):
+    def __init__(
+        self,
+        config: Config,
+        logger: logging.Logger,
+        cache: MetadataCache,
+        fingerprinter: FingerprintGenerator,
+    ):
         """Initialize the duplicate detector with configuration and services."""
         self.config = config
         self.logger = logger
@@ -847,13 +1078,15 @@ class DuplicateDetector:
     @staticmethod
     def hamming_distance(h1: int, h2: int) -> int:
         """Return the Hamming distance between two integer hashes."""
-        return bin(h1 ^ h2).count('1')
+        return bin(h1 ^ h2).count("1")
 
     def _on_visual_match(self, f1: MediaFile, f2: MediaFile):
         """Queue a visual match pair for later processing."""
         self.visual_match_queue.put((f1, f2))
 
-    def _collect_fingerprint_candidates(self, singles: List[MediaFile]) -> Tuple[List[MediaFile], List[Tuple]]:
+    def _collect_fingerprint_candidates(
+        self, singles: List[MediaFile]
+    ) -> Tuple[List[MediaFile], List[Tuple]]:
         """Collect files needing fingerprinting and their candidate pairs."""
         candidates, pairs = [], []
         for i, f1 in enumerate(singles):
@@ -887,27 +1120,41 @@ class DuplicateDetector:
 
         candidates_to_fingerprint, candidate_pairs = [], []
         if Constants.ENABLE_VISUAL_MATCHING:
-            candidates_to_fingerprint, candidate_pairs = self._collect_fingerprint_candidates(singles)
+            candidates_to_fingerprint, candidate_pairs = (
+                self._collect_fingerprint_candidates(singles)
+            )
 
         if candidates_to_fingerprint:
-            safe_print(f"--- Starting background fingerprinting for {len(candidates_to_fingerprint)} files ---")
+            safe_print(
+                f"--- Starting background fingerprinting for {len(candidates_to_fingerprint)} files ---"
+            )
             self.bg_fingerprinter = BackgroundFingerprinter(
-                self.fingerprinter, self.cache, candidates_to_fingerprint, candidate_pairs, self._on_visual_match
+                self.fingerprinter,
+                self.cache,
+                candidates_to_fingerprint,
+                candidate_pairs,
+                self._on_visual_match,
             )
             asyncio.create_task(self.bg_fingerprinter.run())
 
-        total_waste = sum(sum(f.size for f in files[1:]) for files in ready_groups.values() if files)
+        total_waste = sum(
+            sum(f.size for f in files[1:]) for files in ready_groups.values() if files
+        )
         for files in ready_groups.values():
             files.sort(key=lambda f: f.sort_score, reverse=True)
 
         safe_print(f"\n{'=' * 60}")
         safe_print(f" Found {len(ready_groups)} duplicate groups (ready now)")
         if candidates_to_fingerprint:
-            safe_print(f" + {len(candidates_to_fingerprint)} files being fingerprinted in background")
+            safe_print(
+                f" + {len(candidates_to_fingerprint)} files being fingerprinted in background"
+            )
         safe_print(f" Potential savings: {format_file_size(total_waste)}")
         safe_print(f"{'=' * 60}\n")
 
-        sorted_groups = sorted(ready_groups.items(), key=lambda x: sum(f.size for f in x[1]), reverse=True)
+        sorted_groups = sorted(
+            ready_groups.items(), key=lambda x: sum(f.size for f in x[1]), reverse=True
+        )
 
         for i, (key, files) in enumerate(sorted_groups):
             await self._handle_group(i, len(sorted_groups), key, files)
@@ -916,10 +1163,19 @@ class DuplicateDetector:
         if self.bg_fingerprinter:
             self.bg_fingerprinter.stop()
 
-    def _display_group_info(self, idx: int, total: int, title: str, extra: str,
-                            files: List[MediaFile], savings: int) -> None:
+    def _display_group_info(
+        self,
+        idx: int,
+        total: int,
+        title: str,
+        extra: str,
+        files: List[MediaFile],
+        savings: int,
+    ) -> None:
         """Display group information and file listing to the console."""
-        safe_print(f"\n{'=' * 80}\n[{idx + 1}/{total}] {title} ({extra}) | Savings: {format_file_size(savings)}\n{'=' * 80}")
+        safe_print(
+            f"\n{'=' * 80}\n[{idx + 1}/{total}] {title} ({extra}) | Savings: {format_file_size(savings)}\n{'=' * 80}"
+        )
         by_dir = defaultdict(list)
         for j, f in enumerate(files):
             by_dir[f.path.parent].append((j, f))
@@ -931,59 +1187,65 @@ class DuplicateDetector:
             safe_print("-" * 40)
         safe_print("(k #) Keep, (d #) Recycle, (p) Play, (s) Skip, (u) Undo, (q) Quit")
 
-    def _execute_command(self, cmd: str, parts: List[str], files: List[MediaFile]) -> Optional[str]:
+    def _execute_command(
+        self, cmd: str, parts: List[str], files: List[MediaFile]
+    ) -> Optional[str]:
         """Execute a user command. Returns 'break', 'continue', or None."""
-        if cmd == 'q':
+        if cmd == "q":
             if self.bg_fingerprinter:
                 self.bg_fingerprinter.stop()
             sys.exit(0)
-        if cmd == 's':
-            return 'break'
-        if cmd == 'u':
+        if cmd == "s":
+            return "break"
+        if cmd == "u":
             self.undo_last_group()
-            return 'continue'
-        if cmd == 'p':
+            return "continue"
+        if cmd == "p":
             self.auto_play = True
-            return 'continue'
-        if cmd in ('k', 'd') and len(parts) > 1 and parts[1].isdigit():
+            return "continue"
+        if cmd in ("k", "d") and len(parts) > 1 and parts[1].isdigit():
             target_idx = int(parts[1]) - 1
             if 0 <= target_idx < len(files):
-                if cmd == 'k':
+                if cmd == "k":
                     self._keep_file(files[target_idx], files)
-                    return 'break'
+                    return "break"
                 self._recycle_file(files[target_idx])
                 files.pop(target_idx)
                 if len(files) < 2:
-                    return 'break'
+                    return "break"
         return None
 
     def _try_vlc_autoplay(self, files: List[MediaFile]) -> Optional[str]:
         """Attempt VLC auto-play. Returns 'keep', 'skip', or None."""
         if not (self.auto_play and HAS_VLC):
             return None
-        bg_progress = self.bg_fingerprinter.get_progress() if self.bg_fingerprinter else None
+        bg_progress = (
+            self.bg_fingerprinter.get_progress() if self.bg_fingerprinter else None
+        )
         result = VLCPlayer.launch(files, self.fingerprinter.ffmpeg_bin, bg_progress)
         if not result:
             self.auto_play = False
             return None
-        if result.get('action') == 'keep':
-            target_idx = result['index']
+        if result.get("action") == "keep":
+            target_idx = result["index"]
             if 0 <= target_idx < len(files):
                 self._keep_file(files[target_idx], files)
-                return 'keep'
-        if result.get('action') == 'skip':
-            return 'skip'
+                return "keep"
+        if result.get("action") == "skip":
+            return "skip"
         self.auto_play = False
         return None
 
-    async def _handle_group(self, idx: int, total: int, key: Tuple, files: List[MediaFile]) -> None:
+    async def _handle_group(
+        self, idx: int, total: int, key: Tuple, files: List[MediaFile]
+    ) -> None:
         """Handle a single duplicate group with user interaction."""
         title, extra = key[1], key[2]
         savings = sum(f.size for f in files) - max(f.size for f in files)
 
         while True:
             vlc_result = self._try_vlc_autoplay(files)
-            if vlc_result in ('keep', 'skip'):
+            if vlc_result in ("keep", "skip"):
                 return
 
             self._display_group_info(idx, total, title, extra, files, savings)
@@ -998,9 +1260,9 @@ class DuplicateDetector:
                 continue
 
             action = self._execute_command(parts[0], parts, files)
-            if action == 'break':
+            if action == "break":
                 break
-            if action == 'continue':
+            if action == "continue":
                 continue
 
     def _recycle_file(self, file: MediaFile) -> None:
@@ -1021,14 +1283,21 @@ class DuplicateDetector:
                 shutil.copy2(str(file.path), str(dst))
                 file.path.unlink()
             self.logger.info(f"Recycled {file.path}")
-            self.history.append({'type': 'recycle', 'original_path': file.path, 'temp_path': dst, 'timestamp': time.time()})
+            self.history.append(
+                {
+                    "type": "recycle",
+                    "original_path": file.path,
+                    "temp_path": dst,
+                    "timestamp": time.time(),
+                }
+            )
         except Exception as e:
             safe_print(f"Error recycling: {e}")
 
     def _keep_file(self, keep: MediaFile, all_files: List[MediaFile]) -> None:
         """Keep the chosen file and recycle all others in the group."""
         safe_print(f">> Keeping: {keep.name}")
-        self.history.append({'type': 'group_start', 'timestamp': time.time()})
+        self.history.append({"type": "group_start", "timestamp": time.time()})
         for other in all_files:
             if other != keep:
                 self._recycle_file(other)
@@ -1042,11 +1311,11 @@ class DuplicateDetector:
         count = 0
         while self.history:
             item = self.history.pop()
-            if item['type'] == 'group_start':
+            if item["type"] == "group_start":
                 break
-            if item['type'] == 'recycle' and item['temp_path'].exists():
+            if item["type"] == "recycle" and item["temp_path"].exists():
                 try:
-                    shutil.move(str(item['temp_path']), str(item['original_path']))
+                    shutil.move(str(item["temp_path"]), str(item["original_path"]))
                     safe_print(f"Restored: {item['original_path'].name}")
                     count += 1
                 except Exception as e:
@@ -1057,13 +1326,16 @@ class DuplicateDetector:
         """For MediaFile - moved here to keep MediaFile clean."""
         pass  # Implemented on MediaFile directly
 
+
 # Add get_info_string to MediaFile (was missing)
 def _mf_get_info_string(self, display_name: Optional[str] = None) -> str:
     """Build a multi-line info string summarizing this media file."""
     name = display_name if display_name else self.name
     br_kb = int(self.bitrate / 1000)
     depth_str = f"{self.bit_depth}bit" if self.bit_depth > 8 else ""
-    audio_str = Constants.AUDIO_CHANNEL_NAMES.get(self.audio_channels, f"{self.audio_channels}ch")
+    audio_str = Constants.AUDIO_CHANNEL_NAMES.get(
+        self.audio_channels, f"{self.audio_channels}ch"
+    )
     hdr_tag = f" [{self.hdr_str}]" if self.is_hdr or self.is_dolby_vision else ""
     return (
         f"{name} | {self.resolution_str} | {self.video_codec.upper()} {depth_str}{hdr_tag} | "
@@ -1072,11 +1344,13 @@ def _mf_get_info_string(self, display_name: Optional[str] = None) -> str:
         f"Created: {self.created_str} | Modified: {self.modified_str}"
     )
 
+
 MediaFile.get_info_string = _mf_get_info_string
 
 # -----------------------------------------------------------------------------
 # Zoom Comparison Window (SIMPLIFIED: cached images, combined handlers)
 # -----------------------------------------------------------------------------
+
 
 class ZoomCompareWindow:
     """Side-by-side frame comparison with zoom/pan using FFmpeg."""
@@ -1102,11 +1376,29 @@ class ZoomCompareWindow:
             return False
         self.images = []
         for mf in self.files:
-            cmd = [self.ffmpeg_bin, "-ss", str(self.timestamp), "-i", str(mf.path),
-                   "-vframes", "1", "-f", "image2pipe", "-vcodec", "png", "-"]
+            cmd = [
+                self.ffmpeg_bin,
+                "-ss",
+                str(self.timestamp),
+                "-i",
+                str(mf.path),
+                "-vframes",
+                "1",
+                "-f",
+                "image2pipe",
+                "-vcodec",
+                "png",
+                "-",
+            ]
             try:
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if platform.system() == "Windows" else 0)
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                    if platform.system() == "Windows"
+                    else 0,
+                )
                 stdout, _ = proc.communicate(timeout=10)
                 if stdout:
                     self.images.append(Image.open(io.BytesIO(stdout)))
@@ -1120,20 +1412,31 @@ class ZoomCompareWindow:
     def _build_canvas_panels(self, container):
         """Create side-by-side canvas panels with mouse bindings for each image."""
         for i, (img, mf) in enumerate(zip(self.images, self.files)):
-            frame = tk.Frame(container, bg="#1a1a1a", highlightthickness=2,
-                           highlightbackground="#2ea043" if i == 0 else "#333")
+            frame = tk.Frame(
+                container,
+                bg="#1a1a1a",
+                highlightthickness=2,
+                highlightbackground="#2ea043" if i == 0 else "#333",
+            )
             frame.grid(row=0, column=i, sticky="nsew", padx=3, pady=3)
             container.grid_columnconfigure(i, weight=1, uniform="zoom_col")
             container.grid_rowconfigure(0, weight=1)
 
-            tk.Label(frame, text=f"#{i+1}: {mf.name[:50]}", bg="#1a1a1a", fg="#fff",
-                    font=Constants.FONTS['mono_bold']).pack(fill=tk.X)
+            tk.Label(
+                frame,
+                text=f"#{i + 1}: {mf.name[:50]}",
+                bg="#1a1a1a",
+                fg="#fff",
+                font=Constants.FONTS["mono_bold"],
+            ).pack(fill=tk.X)
 
             canvas = tk.Canvas(frame, bg="black", highlightthickness=0)
             canvas.pack(fill=tk.BOTH, expand=True)
             self.canvases.append(canvas)
 
-            canvas.bind("<MouseWheel>", lambda e: self._render(1.1 if e.delta > 0 else 0.9))
+            canvas.bind(
+                "<MouseWheel>", lambda e: self._render(1.1 if e.delta > 0 else 0.9)
+            )
             canvas.bind("<Button-4>", lambda e: self._render(1.1))
             canvas.bind("<Button-5>", lambda e: self._render(0.9))
             canvas.bind("<ButtonPress-1>", self._start_drag)
@@ -1149,22 +1452,36 @@ class ZoomCompareWindow:
         self.root.title(f"Zoom Compare @ {self.timestamp:.1f}s")
         self.root.configure(bg="#1e1e1e")
 
-        screen_w, screen_h = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        screen_w, screen_h = (
+            self.root.winfo_screenwidth(),
+            self.root.winfo_screenheight(),
+        )
         self.root.geometry(f"{int(screen_w * 0.9)}x{int(screen_h * 0.85)}")
 
         # Keyboard bindings
-        for key, fn in [("+", lambda e: self._render(1.25)), ("-", lambda e: self._render(0.8)),
-                        ("=", lambda e: self._render(1.25)), ("r", lambda e: self._reset()),
-                        ("<Escape>", lambda e: self.root.destroy()),
-                        ("<Left>", lambda e: self._pan(-50, 0)), ("<Right>", lambda e: self._pan(50, 0)),
-                        ("<Up>", lambda e: self._pan(0, -50)), ("<Down>", lambda e: self._pan(0, 50))]:
+        for key, fn in [
+            ("+", lambda e: self._render(1.25)),
+            ("-", lambda e: self._render(0.8)),
+            ("=", lambda e: self._render(1.25)),
+            ("r", lambda e: self._reset()),
+            ("<Escape>", lambda e: self.root.destroy()),
+            ("<Left>", lambda e: self._pan(-50, 0)),
+            ("<Right>", lambda e: self._pan(50, 0)),
+            ("<Up>", lambda e: self._pan(0, -50)),
+            ("<Down>", lambda e: self._pan(0, 50)),
+        ]:
             self.root.bind(key, fn)
 
         # Info bar
         info = tk.Frame(self.root, bg="#252526")
         info.pack(fill=tk.X)
-        tk.Label(info, text="Zoom: +/- | Pan: Arrows/Drag | Reset: R | Close: Esc",
-                 bg="#252526", fg="#888", font=("Segoe UI", 9)).pack(pady=5)
+        tk.Label(
+            info,
+            text="Zoom: +/- | Pan: Arrows/Drag | Reset: R | Close: Esc",
+            bg="#252526",
+            fg="#888",
+            font=("Segoe UI", 9),
+        ).pack(pady=5)
 
         # Canvas container
         container = tk.Frame(self.root, bg="#1e1e1e")
@@ -1174,13 +1491,23 @@ class ZoomCompareWindow:
         # Controls
         ctrl = tk.Frame(self.root, bg="#252526")
         ctrl.pack(fill=tk.X)
-        self.zoom_label = tk.Label(ctrl, text="Zoom: 100%", bg="#252526", fg="#fff", font=Constants.FONTS['mono_bold'])
+        self.zoom_label = tk.Label(
+            ctrl,
+            text="Zoom: 100%",
+            bg="#252526",
+            fg="#fff",
+            font=Constants.FONTS["mono_bold"],
+        )
         self.zoom_label.pack(side=tk.LEFT, padx=10, pady=5)
-        for text, cmd, color in [("Zoom +", lambda: self._render(1.25), "#333"),
-                                  ("Zoom -", lambda: self._render(0.8), "#333"),
-                                  ("Reset", self._reset, "#333"),
-                                  ("Close", self.root.destroy, "#c42b1c")]:
-            tk.Button(ctrl, text=text, command=cmd, bg=color, fg="#fff", relief=tk.FLAT).pack(side=tk.LEFT if text != "Close" else tk.RIGHT, padx=2)
+        for text, cmd, color in [
+            ("Zoom +", lambda: self._render(1.25), "#333"),
+            ("Zoom -", lambda: self._render(0.8), "#333"),
+            ("Reset", self._reset, "#333"),
+            ("Close", self.root.destroy, "#c42b1c"),
+        ]:
+            tk.Button(
+                ctrl, text=text, command=cmd, bg=color, fg="#fff", relief=tk.FLAT
+            ).pack(side=tk.LEFT if text != "Close" else tk.RIGHT, padx=2)
 
         self._render()
         self.root.focus_set()
@@ -1250,9 +1577,11 @@ class ZoomCompareWindow:
         self.dragging = False
         self._render()  # LANCZOS on release
 
+
 # -----------------------------------------------------------------------------
 # VLC Player helpers (module-level to keep VLCPlayerApp lean)
 # -----------------------------------------------------------------------------
+
 
 def _compare_color(value, best, higher_better: bool = True) -> str:
     """Get color for value comparison."""
@@ -1267,10 +1596,15 @@ def _compare_color(value, best, higher_better: bool = True) -> str:
     return Constants.COLOR_WORSE
 
 
-def _make_info_label(parent, text, color, font_key='mono', side=tk.LEFT, **opts):
+def _make_info_label(parent, text, color, font_key="mono", side=tk.LEFT, **opts):
     """Create a color-coded info label."""
-    tk.Label(parent, text=text, bg=Constants.COLOR_BG, fg=color,
-            font=Constants.FONTS[font_key]).pack(side=side, **opts)
+    tk.Label(
+        parent,
+        text=text,
+        bg=Constants.COLOR_BG,
+        fg=color,
+        font=Constants.FONTS[font_key],
+    ).pack(side=side, **opts)
 
 
 def _build_video_info_rows(info, index: int, mf, is_best: bool, best: Dict):
@@ -1278,37 +1612,77 @@ def _build_video_info_rows(info, index: int, mf, is_best: bool, best: Dict):
     # Row 1: Name
     name_trunc = mf.name[:50] + "..." if len(mf.name) > 53 else mf.name
     tag = " [BEST]" if is_best else ""
-    _make_info_label(info, f"#{index+1}{tag} {name_trunc}", Constants.COLOR_BEST if is_best else "#fff", 'title', tk.TOP)
+    _make_info_label(
+        info,
+        f"#{index + 1}{tag} {name_trunc}",
+        Constants.COLOR_BEST if is_best else "#fff",
+        "title",
+        tk.TOP,
+    )
 
     # Row 2: Folder
-    _make_info_label(info, f"\U0001f4c1 {truncate_path(mf.path.parent, 60)}", "#777", 'folder', tk.TOP)
+    _make_info_label(
+        info,
+        f"\U0001f4c1 {truncate_path(mf.path.parent, 60)}",
+        "#777",
+        "folder",
+        tk.TOP,
+    )
 
     # Row 3: Video info
     vf = tk.Frame(info, bg=Constants.COLOR_BG)
     vf.pack(fill=tk.X, pady=(3, 0))
-    _make_info_label(vf, mf.resolution_str, _compare_color(mf.pixels, best['res']), 'mono_bold')
+    _make_info_label(
+        vf, mf.resolution_str, _compare_color(mf.pixels, best["res"]), "mono_bold"
+    )
     _make_info_label(vf, " | ", "#555")
-    codec_text = f"{mf.video_codec.upper()}" + (f" {mf.bit_depth}bit" if mf.bit_depth > 8 else "")
-    _make_info_label(vf, codec_text, _compare_color(Constants.CODEC_RANK.get(mf.video_codec.lower(), 0), best['codec']))
+    codec_text = f"{mf.video_codec.upper()}" + (
+        f" {mf.bit_depth}bit" if mf.bit_depth > 8 else ""
+    )
+    _make_info_label(
+        vf,
+        codec_text,
+        _compare_color(
+            Constants.CODEC_RANK.get(mf.video_codec.lower(), 0), best["codec"]
+        ),
+    )
     if mf.is_dolby_vision:
-        tk.Label(vf, text=" [DV]", bg="#7b00ff", fg="white", font=("Consolas", 8, "bold")).pack(side=tk.LEFT, padx=2)
+        tk.Label(
+            vf, text=" [DV]", bg="#7b00ff", fg="white", font=("Consolas", 8, "bold")
+        ).pack(side=tk.LEFT, padx=2)
     elif mf.is_hdr:
-        tk.Label(vf, text=" [HDR]", bg="#ff8800", fg="white", font=("Consolas", 8, "bold")).pack(side=tk.LEFT, padx=2)
+        tk.Label(
+            vf, text=" [HDR]", bg="#ff8800", fg="white", font=("Consolas", 8, "bold")
+        ).pack(side=tk.LEFT, padx=2)
     _make_info_label(vf, " | ", "#555")
-    _make_info_label(vf, f"{int(mf.bitrate/1000)} kbps", _compare_color(mf.bitrate, best['br']))
+    _make_info_label(
+        vf, f"{int(mf.bitrate / 1000)} kbps", _compare_color(mf.bitrate, best["br"])
+    )
     _make_info_label(vf, " | ", "#555")
     _make_info_label(vf, mf.nice_size, Constants.COLOR_NEUTRAL)
 
     # Row 4: Audio
     af = tk.Frame(info, bg=Constants.COLOR_BG)
     af.pack(fill=tk.X, pady=(2, 0))
-    audio_str = Constants.AUDIO_CHANNEL_NAMES.get(mf.audio_channels, f"{mf.audio_channels}ch")
-    _make_info_label(af, f"Audio: {audio_str} {mf.audio_codec.upper()}", _compare_color(mf.audio_channels, best['ch']), 'info')
-    _make_info_label(af, f" ({mf.audio_streams_count} trk)", "#888", 'info')
-    _make_info_label(af, " | ", "#555", 'info')
-    _make_info_label(af, f"Subs: {mf.subs_count}", _compare_color(mf.subs_count, best['subs']), 'info')
-    _make_info_label(af, " | ", "#555", 'info')
-    _make_info_label(af, f"Date: {mf.created_str}", "#888", 'info')
+    audio_str = Constants.AUDIO_CHANNEL_NAMES.get(
+        mf.audio_channels, f"{mf.audio_channels}ch"
+    )
+    _make_info_label(
+        af,
+        f"Audio: {audio_str} {mf.audio_codec.upper()}",
+        _compare_color(mf.audio_channels, best["ch"]),
+        "info",
+    )
+    _make_info_label(af, f" ({mf.audio_streams_count} trk)", "#888", "info")
+    _make_info_label(af, " | ", "#555", "info")
+    _make_info_label(
+        af,
+        f"Subs: {mf.subs_count}",
+        _compare_color(mf.subs_count, best["subs"]),
+        "info",
+    )
+    _make_info_label(af, " | ", "#555", "info")
+    _make_info_label(af, f"Date: {mf.created_str}", "#888", "info")
 
 
 def _attach_vlc_player(app, canvas, mf, index: int):
@@ -1334,8 +1708,12 @@ def _build_video_panel(app, container, index: int, mf, cols: int, best: Dict):
     """Build a single video comparison panel with info and VLC player."""
     row, col, is_best = index // cols, index % cols, (index == 0)
 
-    outer = tk.Frame(container, bg="#1a1a1a", highlightthickness=5,
-                    highlightbackground="#2ea043" if is_best else "#1e1e1e")
+    outer = tk.Frame(
+        container,
+        bg="#1a1a1a",
+        highlightthickness=5,
+        highlightbackground="#2ea043" if is_best else "#1e1e1e",
+    )
     outer.grid(row=row, column=col, sticky="nsew", padx=4, pady=4)
     app.frames.append(outer)
 
@@ -1350,15 +1728,23 @@ def _build_video_panel(app, container, index: int, mf, cols: int, best: Dict):
     _build_video_info_rows(info, index, mf, is_best, best)
 
     # Keep button
-    btn = tk.Button(info, text=f"KEEP #{index + 1}", bg="#2ea043" if is_best else "#444",
-                   fg="white", font=Constants.FONTS['title'], relief=tk.FLAT,
-                   cursor="hand2", command=lambda idx=index: app._keep_file(idx))
+    btn = tk.Button(
+        info,
+        text=f"KEEP #{index + 1}",
+        bg="#2ea043" if is_best else "#444",
+        fg="white",
+        font=Constants.FONTS["title"],
+        relief=tk.FLAT,
+        cursor="hand2",
+        command=lambda idx=index: app._keep_file(idx),
+    )
     btn.pack(fill=tk.X, pady=(5, 0))
 
     # Click handler
     def make_click(idx):
         """Return a click handler that focuses audio on the given index."""
         return lambda e: [app._focus_audio(idx), "break"][1]
+
     outer.bind("<Button-1>", make_click(index))
     canvas.bind("<Button-1>", make_click(index))
 
@@ -1369,11 +1755,16 @@ def _build_video_panel(app, container, index: int, mf, cols: int, best: Dict):
 # VLC Player (SIMPLIFIED: single-pass comparison, inline info panel)
 # -----------------------------------------------------------------------------
 
+
 class VLCPlayerApp:
     """Enhanced side-by-side video comparison player."""
 
-    def __init__(self, media_files: List[MediaFile], ffmpeg_bin: str = "ffmpeg",
-                 bg_progress: Optional[Tuple[int, int]] = None):
+    def __init__(
+        self,
+        media_files: List[MediaFile],
+        ffmpeg_bin: str = "ffmpeg",
+        bg_progress: Optional[Tuple[int, int]] = None,
+    ):
         """Initialize the VLC player comparison app."""
         self.media_files = media_files
         self.ffmpeg_bin = ffmpeg_bin
@@ -1391,14 +1782,16 @@ class VLCPlayerApp:
         self.result = None
 
         # SINGLE-PASS: Compute best values inline (was separate _compute_comparison)
-        self.best = {'res': 0, 'br': 0, 'ch': 0, 'subs': 0, 'depth': 0, 'codec': 0}
+        self.best = {"res": 0, "br": 0, "ch": 0, "subs": 0, "depth": 0, "codec": 0}
         for mf in media_files:
-            self.best['res'] = max(self.best['res'], mf.pixels)
-            self.best['br'] = max(self.best['br'], mf.bitrate)
-            self.best['ch'] = max(self.best['ch'], mf.audio_channels)
-            self.best['subs'] = max(self.best['subs'], mf.subs_count)
-            self.best['depth'] = max(self.best['depth'], mf.bit_depth)
-            self.best['codec'] = max(self.best['codec'], Constants.CODEC_RANK.get(mf.video_codec.lower(), 0))
+            self.best["res"] = max(self.best["res"], mf.pixels)
+            self.best["br"] = max(self.best["br"], mf.bitrate)
+            self.best["ch"] = max(self.best["ch"], mf.audio_channels)
+            self.best["subs"] = max(self.best["subs"], mf.subs_count)
+            self.best["depth"] = max(self.best["depth"], mf.bit_depth)
+            self.best["codec"] = max(
+                self.best["codec"], Constants.CODEC_RANK.get(mf.video_codec.lower(), 0)
+            )
 
     def run(self) -> Optional[Dict]:
         """Launch the side-by-side comparison player."""
@@ -1411,10 +1804,16 @@ class VLCPlayerApp:
         self.root.geometry(f"{int(sw * 0.90)}x{int(sh * 0.85)}")
 
         # Bindings
-        for key, fn in [("<space>", lambda e: self._toggle_pause()), ("<Left>", lambda e: self._seek_rel(-5)),
-                        ("<Right>", lambda e: self._seek_rel(5)), ("m", lambda e: self._mute_all()),
-                        ("q", lambda e: self._confirm_exit()), ("s", lambda e: self._skip_group()),
-                        ("z", lambda e: self._open_zoom()), ("Z", lambda e: self._open_zoom())]:
+        for key, fn in [
+            ("<space>", lambda e: self._toggle_pause()),
+            ("<Left>", lambda e: self._seek_rel(-5)),
+            ("<Right>", lambda e: self._seek_rel(5)),
+            ("m", lambda e: self._mute_all()),
+            ("q", lambda e: self._confirm_exit()),
+            ("s", lambda e: self._skip_group()),
+            ("z", lambda e: self._open_zoom()),
+            ("Z", lambda e: self._open_zoom()),
+        ]:
             self.root.bind(key, fn)
 
         count = len(self.media_files)
@@ -1443,7 +1842,11 @@ class VLCPlayerApp:
 
         self._build_controls()
         for i, frame in enumerate(self.frames):
-            color = "#007acc" if i == self.active_audio_idx else ("#2ea043" if i == 0 else "#1e1e1e")
+            color = (
+                "#007acc"
+                if i == self.active_audio_idx
+                else ("#2ea043" if i == 0 else "#1e1e1e")
+            )
             frame.configure(highlightbackground=color, highlightthickness=5)
         self._update_loop()
         self.root.mainloop()
@@ -1456,30 +1859,69 @@ class VLCPlayerApp:
 
         if self.bg_progress:
             done, total = self.bg_progress
-            tk.Label(ctrl, text=f"Fingerprinting: {done}/{total} files...",
-                    bg="#2d2d2d", fg="#ffaa00", font=("Segoe UI", 9)).pack(pady=(0, 5))
+            tk.Label(
+                ctrl,
+                text=f"Fingerprinting: {done}/{total} files...",
+                bg="#2d2d2d",
+                fg="#ffaa00",
+                font=("Segoe UI", 9),
+            ).pack(pady=(0, 5))
 
         self.slider_var = tk.DoubleVar()
-        slider = tk.Scale(ctrl, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.slider_var,
-                         showvalue=0, bg="#2d2d2d", fg="#007acc", troughcolor="#404040",
-                         activebackground="#0099ff", command=self._on_seek, highlightthickness=0, bd=0)
+        slider = tk.Scale(
+            ctrl,
+            from_=0,
+            to=100,
+            orient=tk.HORIZONTAL,
+            variable=self.slider_var,
+            showvalue=0,
+            bg="#2d2d2d",
+            fg="#007acc",
+            troughcolor="#404040",
+            activebackground="#0099ff",
+            command=self._on_seek,
+            highlightthickness=0,
+            bd=0,
+        )
         slider.pack(fill=tk.X, padx=20, pady=(0, 10))
-        slider.bind("<ButtonPress-1>", lambda e: setattr(self, 'slider_dragging', True))
-        slider.bind("<ButtonRelease-1>", lambda e: [setattr(self, 'slider_dragging', False), self._on_seek(slider.get())])
+        slider.bind("<ButtonPress-1>", lambda e: setattr(self, "slider_dragging", True))
+        slider.bind(
+            "<ButtonRelease-1>",
+            lambda e: [
+                setattr(self, "slider_dragging", False),
+                self._on_seek(slider.get()),
+            ],
+        )
 
         bf = tk.Frame(ctrl, bg="#2d2d2d")
         bf.pack()
 
-        for text, cmd, color in [("⏯ Pause (Space)", self._toggle_pause, "#3c3c3c"),
-                                  ("🔇 Mute (M)", self._mute_all, "#3c3c3c"),
-                                  ("🔍 Zoom (Z)", self._open_zoom, "#555"),
-                                  ("⏭ Skip (S)", self._skip_group, "#007acc"),
-                                  ("❌ Close (Q)", self._confirm_exit, "#c42b1c")]:
-            tk.Button(bf, text=text, command=cmd, bg=color, fg="white",
-                     relief=tk.FLAT, padx=12, pady=5, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=3)
+        for text, cmd, color in [
+            ("⏯ Pause (Space)", self._toggle_pause, "#3c3c3c"),
+            ("🔇 Mute (M)", self._mute_all, "#3c3c3c"),
+            ("🔍 Zoom (Z)", self._open_zoom, "#555"),
+            ("⏭ Skip (S)", self._skip_group, "#007acc"),
+            ("❌ Close (Q)", self._confirm_exit, "#c42b1c"),
+        ]:
+            tk.Button(
+                bf,
+                text=text,
+                command=cmd,
+                bg=color,
+                fg="white",
+                relief=tk.FLAT,
+                padx=12,
+                pady=5,
+                font=("Segoe UI", 9),
+            ).pack(side=tk.LEFT, padx=3)
 
-        tk.Label(bf, text="Click video for audio | ←→ Seek", bg="#2d2d2d", fg="#666",
-                font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=15)
+        tk.Label(
+            bf,
+            text="Click video for audio | ←→ Seek",
+            bg="#2d2d2d",
+            fg="#666",
+            font=("Segoe UI", 8),
+        ).pack(side=tk.LEFT, padx=15)
 
     def _open_zoom(self):
         """Open the zoom-comparison window at the current playback position."""
@@ -1496,8 +1938,11 @@ class VLCPlayerApp:
 
     def _keep_file(self, index: int):
         """Prompt user to confirm keeping the selected video."""
-        if messagebox.askyesno("Confirm Keep", f"Keep video #{index + 1}\n'{self.media_files[index].name}'\n\nand recycle the others?"):
-            self.result = {'action': 'keep', 'index': index}
+        if messagebox.askyesno(
+            "Confirm Keep",
+            f"Keep video #{index + 1}\n'{self.media_files[index].name}'\n\nand recycle the others?",
+        ):
+            self.result = {"action": "keep", "index": index}
             if self.root:
                 self.root.quit()
             self._cleanup()
@@ -1509,7 +1954,7 @@ class VLCPlayerApp:
 
     def _skip_group(self):
         """Skip the current group without making a decision."""
-        self.result = {'action': 'skip'}
+        self.result = {"action": "skip"}
         if self.root:
             self.root.quit()
         self._cleanup()
@@ -1520,7 +1965,11 @@ class VLCPlayerApp:
         for i, p in enumerate(self.players):
             p.audio_set_mute(i != target_idx)
         for i, frame in enumerate(self.frames):
-            color = "#007acc" if i == self.active_audio_idx else ("#2ea043" if i == 0 else "#1e1e1e")
+            color = (
+                "#007acc"
+                if i == self.active_audio_idx
+                else ("#2ea043" if i == 0 else "#1e1e1e")
+            )
             frame.configure(highlightbackground=color, highlightthickness=5)
 
     def _toggle_pause(self):
@@ -1560,7 +2009,11 @@ class VLCPlayerApp:
         """Periodically update the seek slider to match playback position."""
         if self.root and not self.slider_dragging and self.players:
             try:
-                p = self.players[self.active_audio_idx] if self.active_audio_idx < len(self.players) else self.players[0]
+                p = (
+                    self.players[self.active_audio_idx]
+                    if self.active_audio_idx < len(self.players)
+                    else self.players[0]
+                )
                 pos = p.get_position()
                 if pos >= 0:
                     self.slider_var.set(pos * 100)
@@ -1589,16 +2042,21 @@ class VLCPlayerApp:
 
 class VLCPlayer:
     @staticmethod
-    def launch(files: List[MediaFile], ffmpeg_bin: str = "ffmpeg",
-               bg_progress: Optional[Tuple[int, int]] = None) -> Optional[Dict]:
+    def launch(
+        files: List[MediaFile],
+        ffmpeg_bin: str = "ffmpeg",
+        bg_progress: Optional[Tuple[int, int]] = None,
+    ) -> Optional[Dict]:
         """Create and run a VLC comparison player, returning the user's choice."""
         if not HAS_VLC:
             return None
         return VLCPlayerApp(files, ffmpeg_bin, bg_progress).run()
 
+
 # -----------------------------------------------------------------------------
 # Main Application
 # -----------------------------------------------------------------------------
+
 
 class VisualAIApp:
     """Top-level application orchestrating scan, detection, and user flow."""
@@ -1615,8 +2073,10 @@ class VisualAIApp:
         try:
             root = tk.Tk()
             root.withdraw()
-            root.attributes('-topmost', True)
-            folder = filedialog.askdirectory(title="Select folder to scan for video duplicates", mustexist=True)
+            root.attributes("-topmost", True)
+            folder = filedialog.askdirectory(
+                title="Select folder to scan for video duplicates", mustexist=True
+            )
             root.destroy()
             return folder if folder else None
         except Exception as e:
@@ -1643,8 +2103,10 @@ class VisualAIApp:
         safe_print("\n" + "=" * 60)
         safe_print("No valid source directories configured.")
         safe_print("=" * 60)
-        response = input("\nWould you like to pick a folder to scan? (y/n): ").strip().lower()
-        if response == 'y':
+        response = (
+            input("\nWould you like to pick a folder to scan? (y/n): ").strip().lower()
+        )
+        if response == "y":
             folder = self._pick_folder_dialog()
             if folder:
                 safe_print(f"Selected: {folder}")
@@ -1659,21 +2121,31 @@ class VisualAIApp:
         base_dir = Path(__file__).resolve().parent
 
         defaults = {
-            "source_dirs": [], "except_dir": str(base_dir / "Exceptions"),
+            "source_dirs": [],
+            "except_dir": str(base_dir / "Exceptions"),
             "user_recycle_dir": str(base_dir / "Recycled"),
             "exclude_keywords": ["trailer", "sample"],
-            "video_extensions": ["mp4", "mkv", "avi", "wmv", "mov", "m4v", "mpg", "webm"],
+            "video_extensions": [
+                "mp4",
+                "mkv",
+                "avi",
+                "wmv",
+                "mov",
+                "m4v",
+                "mpg",
+                "webm",
+            ],
         }
 
         cfg_path = base_dir / "visual_ai_config.json"
         if cfg_path.exists():
             try:
-                with open(cfg_path, 'r', encoding='utf-8') as f:
+                with open(cfg_path, "r", encoding="utf-8") as f:
                     defaults.update(json.load(f))
             except Exception as e:
                 safe_print(f"Config load error: {e}")
 
-        if hasattr(args, 'source_dirs') and args.source_dirs:
+        if hasattr(args, "source_dirs") and args.source_dirs:
             defaults["source_dirs"] = args.source_dirs
 
         valid_sources = self._validate_source_dirs(defaults["source_dirs"])
@@ -1687,21 +2159,29 @@ class VisualAIApp:
             user_recycle_dir=Path(defaults["user_recycle_dir"]),
             exclude_keywords=defaults["exclude_keywords"],
             video_extensions=set(defaults["video_extensions"]),
-            max_workers=getattr(args, 'max_workers', Constants.DEFAULT_MAX_WORKERS),
-            dry_run=getattr(args, 'dry_run', False),
-            log_file=Path(args.log_file) if hasattr(args, 'log_file') and args.log_file else None,
-            verbose=getattr(args, 'verbose', False),
-            cache_db_path=base_dir / "visual_ai_cache.db"
+            max_workers=getattr(args, "max_workers", Constants.DEFAULT_MAX_WORKERS),
+            dry_run=getattr(args, "dry_run", False),
+            log_file=Path(args.log_file)
+            if hasattr(args, "log_file") and args.log_file
+            else None,
+            verbose=getattr(args, "verbose", False),
+            cache_db_path=base_dir / "visual_ai_cache.db",
         )
 
     async def run(self) -> None:
         """Parse arguments, scan directories, and process duplicates."""
-        parser = argparse.ArgumentParser(description="Visual AI Duplicate Detector v6.1")
-        parser.add_argument('-s', '--source-dirs', nargs='+', help='Directories to scan')
-        parser.add_argument('-w', '--max-workers', type=int, default=Constants.DEFAULT_MAX_WORKERS)
-        parser.add_argument('-n', '--dry-run', action='store_true')
-        parser.add_argument('-l', '--log-file')
-        parser.add_argument('-v', '--verbose', action='store_true')
+        parser = argparse.ArgumentParser(
+            description="Visual AI Duplicate Detector v6.1"
+        )
+        parser.add_argument(
+            "-s", "--source-dirs", nargs="+", help="Directories to scan"
+        )
+        parser.add_argument(
+            "-w", "--max-workers", type=int, default=Constants.DEFAULT_MAX_WORKERS
+        )
+        parser.add_argument("-n", "--dry-run", action="store_true")
+        parser.add_argument("-l", "--log-file")
+        parser.add_argument("-v", "--verbose", action="store_true")
 
         args = parser.parse_args()
         self.config = self.load_config(args)
@@ -1716,8 +2196,12 @@ class VisualAIApp:
         await scanner.check_binaries()
         groups = await scanner.scan()
 
-        fingerprinter = FingerprintGenerator(self.pm, scanner.ffmpeg_bin, self.logger, self.config.max_workers)
-        detector = DuplicateDetector(self.config, self.logger, self.cache, fingerprinter)
+        fingerprinter = FingerprintGenerator(
+            self.pm, scanner.ffmpeg_bin, self.logger, self.config.max_workers
+        )
+        detector = DuplicateDetector(
+            self.config, self.logger, self.cache, fingerprinter
+        )
         await detector.process(groups)
 
         fingerprinter.shutdown()
@@ -1726,7 +2210,7 @@ class VisualAIApp:
 
 
 if __name__ == "__main__":
-    if sys.platform == 'win32' and sys.version_info < (3, 13):
+    if sys.platform == "win32" and sys.version_info < (3, 13):
         try:
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         except AttributeError:
@@ -1741,6 +2225,7 @@ if __name__ == "__main__":
         pass
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         safe_print(f"\nCRITICAL ERROR: {e}")
     finally:

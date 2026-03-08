@@ -36,10 +36,10 @@ import concurrent.futures
 import logging
 
 # === FIX WINDOWS CONSOLE ENCODING ===
-if sys.stdout.encoding and sys.stdout.encoding.lower() not in ('utf-8', 'utf8'):
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
     try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
 
@@ -47,11 +47,11 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() not in ('utf-8', 'utf8'):
 log_file = Path("x_ray_crash.log")
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(message)s',
+    format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler(log_file, mode='w', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
+        logging.FileHandler(log_file, mode="w", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
 )
 logger = logging.getLogger(__name__)
 logger.info(f"=== X-Ray Project Starting - Log file: {log_file.absolute()} ===")
@@ -61,50 +61,234 @@ __version__ = "3.0.0"
 # Python 3.10+ exposes sys.stdlib_module_names. For older runtimes we keep a
 # comprehensive static fallback so the tool stays self-contained.
 
-_STATIC_STDLIB = frozenset({
-    "__future__", "_thread", "abc", "aifc", "argparse", "array", "ast",
-    "asynchat", "asyncio", "asyncore", "atexit", "audioop", "base64",
-    "bdb", "binascii", "binhex", "bisect", "builtins", "bz2", "calendar",
-    "cgi", "cgitb", "chunk", "cmath", "cmd", "code", "codecs", "codeop",
-    "collections", "colorsys", "compileall", "concurrent", "configparser",
-    "contextlib", "contextvars", "copy", "copyreg", "cProfile", "crypt",
-    "csv", "ctypes", "curses", "dataclasses", "datetime", "dbm", "decimal",
-    "difflib", "dis", "distutils", "doctest", "email", "encodings",
-    "enum", "errno", "faulthandler", "fcntl", "filecmp", "fileinput",
-    "fnmatch", "fractions", "ftplib", "functools", "gc", "getopt",
-    "getpass", "gettext", "glob", "graphlib", "grp", "gzip", "hashlib",
-    "heapq", "hmac", "html", "http", "idlelib", "imaplib", "imghdr",
-    "imp", "importlib", "inspect", "io", "ipaddress", "itertools", "json",
-    "keyword", "lib2to3", "linecache", "locale", "logging", "lzma",
-    "mailbox", "mailcap", "marshal", "math", "mimetypes", "mmap",
-    "modulefinder", "multiprocessing", "netrc", "nis", "nntplib",
-    "numbers", "operator", "optparse", "os", "ossaudiodev", "pathlib",
-    "pdb", "pickle", "pickletools", "pipes", "pkgutil", "platform",
-    "plistlib", "poplib", "posix", "posixpath", "pprint", "profile",
-    "pstats", "pty", "pwd", "py_compile", "pyclbr", "pydoc", "queue",
-    "quopri", "random", "re", "readline", "reprlib", "resource", "rlcompleter",
-    "runpy", "sched", "secrets", "select", "selectors", "shelve", "shlex",
-    "shutil", "signal", "site", "smtpd", "smtplib", "sndhdr", "socket",
-    "socketserver", "spwd", "sqlite3", "sre_compile", "sre_constants",
-    "sre_parse", "ssl", "stat", "statistics", "string", "stringprep",
-    "struct", "subprocess", "sunau", "symtable", "sys", "sysconfig",
-    "syslog", "tabnanny", "tarfile", "telnetlib", "tempfile", "termios",
-    "test", "textwrap", "threading", "time", "timeit", "tkinter", "token",
-    "tokenize", "tomllib", "trace", "traceback", "tracemalloc", "tty",
-    "turtle", "turtledemo", "types", "typing", "unicodedata", "unittest",
-    "urllib", "uu", "uuid", "venv", "warnings", "wave", "weakref",
-    "webbrowser", "winreg", "winsound", "wsgiref", "xdrlib", "xml",
-    "xmlrpc", "zipapp", "zipfile", "zipimport", "zlib", "zoneinfo",
-    # internal / private
-    "_abc", "_collections_abc", "_io", "_thread", "_bootsubprocess",
-})
+_STATIC_STDLIB = frozenset(
+    {
+        "__future__",
+        "_thread",
+        "abc",
+        "aifc",
+        "argparse",
+        "array",
+        "ast",
+        "asynchat",
+        "asyncio",
+        "asyncore",
+        "atexit",
+        "audioop",
+        "base64",
+        "bdb",
+        "binascii",
+        "binhex",
+        "bisect",
+        "builtins",
+        "bz2",
+        "calendar",
+        "cgi",
+        "cgitb",
+        "chunk",
+        "cmath",
+        "cmd",
+        "code",
+        "codecs",
+        "codeop",
+        "collections",
+        "colorsys",
+        "compileall",
+        "concurrent",
+        "configparser",
+        "contextlib",
+        "contextvars",
+        "copy",
+        "copyreg",
+        "cProfile",
+        "crypt",
+        "csv",
+        "ctypes",
+        "curses",
+        "dataclasses",
+        "datetime",
+        "dbm",
+        "decimal",
+        "difflib",
+        "dis",
+        "distutils",
+        "doctest",
+        "email",
+        "encodings",
+        "enum",
+        "errno",
+        "faulthandler",
+        "fcntl",
+        "filecmp",
+        "fileinput",
+        "fnmatch",
+        "fractions",
+        "ftplib",
+        "functools",
+        "gc",
+        "getopt",
+        "getpass",
+        "gettext",
+        "glob",
+        "graphlib",
+        "grp",
+        "gzip",
+        "hashlib",
+        "heapq",
+        "hmac",
+        "html",
+        "http",
+        "idlelib",
+        "imaplib",
+        "imghdr",
+        "imp",
+        "importlib",
+        "inspect",
+        "io",
+        "ipaddress",
+        "itertools",
+        "json",
+        "keyword",
+        "lib2to3",
+        "linecache",
+        "locale",
+        "logging",
+        "lzma",
+        "mailbox",
+        "mailcap",
+        "marshal",
+        "math",
+        "mimetypes",
+        "mmap",
+        "modulefinder",
+        "multiprocessing",
+        "netrc",
+        "nis",
+        "nntplib",
+        "numbers",
+        "operator",
+        "optparse",
+        "os",
+        "ossaudiodev",
+        "pathlib",
+        "pdb",
+        "pickle",
+        "pickletools",
+        "pipes",
+        "pkgutil",
+        "platform",
+        "plistlib",
+        "poplib",
+        "posix",
+        "posixpath",
+        "pprint",
+        "profile",
+        "pstats",
+        "pty",
+        "pwd",
+        "py_compile",
+        "pyclbr",
+        "pydoc",
+        "queue",
+        "quopri",
+        "random",
+        "re",
+        "readline",
+        "reprlib",
+        "resource",
+        "rlcompleter",
+        "runpy",
+        "sched",
+        "secrets",
+        "select",
+        "selectors",
+        "shelve",
+        "shlex",
+        "shutil",
+        "signal",
+        "site",
+        "smtpd",
+        "smtplib",
+        "sndhdr",
+        "socket",
+        "socketserver",
+        "spwd",
+        "sqlite3",
+        "sre_compile",
+        "sre_constants",
+        "sre_parse",
+        "ssl",
+        "stat",
+        "statistics",
+        "string",
+        "stringprep",
+        "struct",
+        "subprocess",
+        "sunau",
+        "symtable",
+        "sys",
+        "sysconfig",
+        "syslog",
+        "tabnanny",
+        "tarfile",
+        "telnetlib",
+        "tempfile",
+        "termios",
+        "test",
+        "textwrap",
+        "threading",
+        "time",
+        "timeit",
+        "tkinter",
+        "token",
+        "tokenize",
+        "tomllib",
+        "trace",
+        "traceback",
+        "tracemalloc",
+        "tty",
+        "turtle",
+        "turtledemo",
+        "types",
+        "typing",
+        "unicodedata",
+        "unittest",
+        "urllib",
+        "uu",
+        "uuid",
+        "venv",
+        "warnings",
+        "wave",
+        "weakref",
+        "webbrowser",
+        "winreg",
+        "winsound",
+        "wsgiref",
+        "xdrlib",
+        "xml",
+        "xmlrpc",
+        "zipapp",
+        "zipfile",
+        "zipimport",
+        "zlib",
+        "zoneinfo",
+        # internal / private
+        "_abc",
+        "_collections_abc",
+        "_io",
+        "_thread",
+        "_bootsubprocess",
+    }
+)
+
 
 def _get_stdlib_names() -> frozenset:
     """Return the set of top-level stdlib module names."""
-    if hasattr(sys, "stdlib_module_names"):          # Python 3.10+
+    if hasattr(sys, "stdlib_module_names"):  # Python 3.10+
         return sys.stdlib_module_names | _STATIC_STDLIB
     base = set(sys.builtin_module_names) | _STATIC_STDLIB
     return frozenset(base)
+
 
 STDLIB_NAMES = _get_stdlib_names()
 
@@ -112,306 +296,306 @@ STDLIB_NAMES = _get_stdlib_names()
 # Only entries where the import name != the pip install name.
 PYPI_MAP = {
     # Imaging / Vision
-    "cv2":                   "opencv-python",
-    "PIL":                   "Pillow",
-    "Image":                 "Pillow",
-    "skimage":               "scikit-image",
+    "cv2": "opencv-python",
+    "PIL": "Pillow",
+    "Image": "Pillow",
+    "skimage": "scikit-image",
     # ML / AI
-    "sklearn":               "scikit-learn",
-    "xgboost":               "xgboost",
-    "lightgbm":              "lightgbm",
-    "catboost":              "catboost",
-    "tf":                    "tensorflow",
-    "tensorflow":            "tensorflow",
-    "torch":                 "torch",
-    "torchvision":           "torchvision",
-    "transformers":          "transformers",
+    "sklearn": "scikit-learn",
+    "xgboost": "xgboost",
+    "lightgbm": "lightgbm",
+    "catboost": "catboost",
+    "tf": "tensorflow",
+    "tensorflow": "tensorflow",
+    "torch": "torch",
+    "torchvision": "torchvision",
+    "transformers": "transformers",
     "sentence_transformers": "sentence-transformers",
-    "huggingface_hub":       "huggingface-hub",
-    "datasets":              "datasets",
-    "tokenizers":            "tokenizers",
-    "accelerate":            "accelerate",
-    "diffusers":             "diffusers",
-    "safetensors":           "safetensors",
-    "peft":                  "peft",
-    "bitsandbytes":          "bitsandbytes",
-    "auto_gptq":             "auto-gptq",
-    "faiss":                 "faiss-cpu",
-    "faster_whisper":        "faster-whisper",
-    "whisper":               "openai-whisper",
-    "hf_transfer":           "hf-transfer",
-    "openai":                "openai",
-    "anthropic":             "anthropic",
-    "langchain":             "langchain",
-    "langchain_core":        "langchain-core",
-    "langchain_community":   "langchain-community",
-    "langchain_openai":      "langchain-openai",
-    "llama_cpp":             "llama-cpp-python",
-    "ctransformers":         "ctransformers",
-    "chromadb":              "chromadb",
-    "pinecone":              "pinecone-client",
-    "weaviate":              "weaviate-client",
-    "rank_bm25":             "rank-bm25",
+    "huggingface_hub": "huggingface-hub",
+    "datasets": "datasets",
+    "tokenizers": "tokenizers",
+    "accelerate": "accelerate",
+    "diffusers": "diffusers",
+    "safetensors": "safetensors",
+    "peft": "peft",
+    "bitsandbytes": "bitsandbytes",
+    "auto_gptq": "auto-gptq",
+    "faiss": "faiss-cpu",
+    "faster_whisper": "faster-whisper",
+    "whisper": "openai-whisper",
+    "hf_transfer": "hf-transfer",
+    "openai": "openai",
+    "anthropic": "anthropic",
+    "langchain": "langchain",
+    "langchain_core": "langchain-core",
+    "langchain_community": "langchain-community",
+    "langchain_openai": "langchain-openai",
+    "llama_cpp": "llama-cpp-python",
+    "ctransformers": "ctransformers",
+    "chromadb": "chromadb",
+    "pinecone": "pinecone-client",
+    "weaviate": "weaviate-client",
+    "rank_bm25": "rank-bm25",
     # Data / Serialization
-    "yaml":                  "PyYAML",
-    "toml":                  "toml",
-    "tomli":                 "tomli",
-    "ujson":                 "ujson",
-    "orjson":                "orjson",
-    "msgpack":               "msgpack",
+    "yaml": "PyYAML",
+    "toml": "toml",
+    "tomli": "tomli",
+    "ujson": "ujson",
+    "orjson": "orjson",
+    "msgpack": "msgpack",
     # Web scraping / parsing
-    "bs4":                   "beautifulsoup4",
-    "lxml":                  "lxml",
-    "scrapy":                "scrapy",
-    "selenium":              "selenium",
-    "playwright":            "playwright",
+    "bs4": "beautifulsoup4",
+    "lxml": "lxml",
+    "scrapy": "scrapy",
+    "selenium": "selenium",
+    "playwright": "playwright",
     # Web frameworks
-    "flask":                 "Flask",
-    "django":                "Django",
-    "fastapi":               "fastapi",
-    "starlette":             "starlette",
-    "uvicorn":               "uvicorn",
-    "gunicorn":              "gunicorn",
-    "sanic":                 "sanic",
-    "bottle":                "bottle",
-    "tornado":               "tornado",
-    "nicegui":               "nicegui",
+    "flask": "Flask",
+    "django": "Django",
+    "fastapi": "fastapi",
+    "starlette": "starlette",
+    "uvicorn": "uvicorn",
+    "gunicorn": "gunicorn",
+    "sanic": "sanic",
+    "bottle": "bottle",
+    "tornado": "tornado",
+    "nicegui": "nicegui",
     # HTTP / networking
-    "httpx":                 "httpx",
-    "aiohttp":               "aiohttp",
-    "requests":              "requests",
-    "urllib3":               "urllib3",
-    "websocket":             "websocket-client",
-    "websockets":            "websockets",
-    "paramiko":              "paramiko",
-    "grpc":                  "grpcio",
-    "zmq":                   "pyzmq",
+    "httpx": "httpx",
+    "aiohttp": "aiohttp",
+    "requests": "requests",
+    "urllib3": "urllib3",
+    "websocket": "websocket-client",
+    "websockets": "websockets",
+    "paramiko": "paramiko",
+    "grpc": "grpcio",
+    "zmq": "pyzmq",
     # Database / storage
-    "pymongo":               "pymongo",
-    "motor":                 "motor",
-    "redis":                 "redis",
-    "psycopg2":              "psycopg2-binary",
-    "MySQLdb":               "mysqlclient",
-    "mysql":                 "mysql-connector-python",
-    "sqlalchemy":            "SQLAlchemy",
-    "alembic":               "alembic",
-    "peewee":                "peewee",
-    "qdrant_client":         "qdrant-client",
-    "qdrant":                "qdrant-client",
+    "pymongo": "pymongo",
+    "motor": "motor",
+    "redis": "redis",
+    "psycopg2": "psycopg2-binary",
+    "MySQLdb": "mysqlclient",
+    "mysql": "mysql-connector-python",
+    "sqlalchemy": "SQLAlchemy",
+    "alembic": "alembic",
+    "peewee": "peewee",
+    "qdrant_client": "qdrant-client",
+    "qdrant": "qdrant-client",
     # PDF / document
-    "pymupdf":               "PyMuPDF",
-    "fitz":                  "PyMuPDF",
-    "pypdf":                 "pypdf",
-    "pypdf2":                "PyPDF2",
-    "PyPDF2":                "PyPDF2",
-    "pdfplumber":            "pdfplumber",
-    "docx":                  "python-docx",
-    "openpyxl":              "openpyxl",
-    "xlrd":                  "xlrd",
-    "pytesseract":           "pytesseract",
+    "pymupdf": "PyMuPDF",
+    "fitz": "PyMuPDF",
+    "pypdf": "pypdf",
+    "pypdf2": "PyPDF2",
+    "PyPDF2": "PyPDF2",
+    "pdfplumber": "pdfplumber",
+    "docx": "python-docx",
+    "openpyxl": "openpyxl",
+    "xlrd": "xlrd",
+    "pytesseract": "pytesseract",
     # Crypto / auth
-    "Crypto":                "pycryptodome",
-    "nacl":                  "PyNaCl",
-    "jose":                  "python-jose",
-    "jwt":                   "PyJWT",
+    "Crypto": "pycryptodome",
+    "nacl": "PyNaCl",
+    "jose": "python-jose",
+    "jwt": "PyJWT",
     # CLI / UI / display
-    "tqdm":                  "tqdm",
-    "rich":                  "rich",
-    "click":                 "click",
-    "typer":                 "typer",
-    "colorama":              "colorama",
+    "tqdm": "tqdm",
+    "rich": "rich",
+    "click": "click",
+    "typer": "typer",
+    "colorama": "colorama",
     # Plotting
-    "matplotlib":            "matplotlib",
-    "seaborn":               "seaborn",
-    "plotly":                "plotly",
-    "bokeh":                 "bokeh",
-    "altair":                "altair",
+    "matplotlib": "matplotlib",
+    "seaborn": "seaborn",
+    "plotly": "plotly",
+    "bokeh": "bokeh",
+    "altair": "altair",
     # Data / science
-    "numpy":                 "numpy",
-    "np":                    "numpy",
-    "pandas":                "pandas",
-    "pd":                    "pandas",
-    "scipy":                 "scipy",
-    "sympy":                 "sympy",
-    "statsmodels":           "statsmodels",
-    "polars":                "polars",
-    "pyarrow":               "pyarrow",
-    "dask":                  "dask",
+    "numpy": "numpy",
+    "np": "numpy",
+    "pandas": "pandas",
+    "pd": "pandas",
+    "scipy": "scipy",
+    "sympy": "sympy",
+    "statsmodels": "statsmodels",
+    "polars": "polars",
+    "pyarrow": "pyarrow",
+    "dask": "dask",
     # Audio / video
-    "sounddevice":           "sounddevice",
-    "soundfile":             "soundfile",
-    "pyttsx3":               "pyttsx3",
-    "pydub":                 "pydub",
-    "librosa":               "librosa",
-    "moviepy":               "moviepy",
-    "ffmpeg":                "ffmpeg-python",
+    "sounddevice": "sounddevice",
+    "soundfile": "soundfile",
+    "pyttsx3": "pyttsx3",
+    "pydub": "pydub",
+    "librosa": "librosa",
+    "moviepy": "moviepy",
+    "ffmpeg": "ffmpeg-python",
     # System / DevOps
-    "psutil":                "psutil",
-    "watchdog":              "watchdog",
-    "dotenv":                "python-dotenv",
-    "decouple":              "python-decouple",
+    "psutil": "psutil",
+    "watchdog": "watchdog",
+    "dotenv": "python-dotenv",
+    "decouple": "python-decouple",
     # Testing
-    "pytest":                "pytest",
-    "respx":                 "respx",
-    "hypothesis":            "hypothesis",
-    "freezegun":             "freezegun",
-    "factory":               "factory-boy",
-    "faker":                 "Faker",
+    "pytest": "pytest",
+    "respx": "respx",
+    "hypothesis": "hypothesis",
+    "freezegun": "freezegun",
+    "factory": "factory-boy",
+    "faker": "Faker",
     # Streamlit / Gradio
-    "streamlit":             "streamlit",
-    "gradio":                "gradio",
+    "streamlit": "streamlit",
+    "gradio": "gradio",
     # Misc
-    "pydantic":              "pydantic",
-    "attrs":                 "attrs",
-    "marshmallow":           "marshmallow",
-    "loguru":                "loguru",
-    "arrow":                 "arrow",
-    "pendulum":              "pendulum",
-    "dateutil":              "python-dateutil",
-    "regex":                 "regex",
-    "chardet":               "chardet",
-    "charset_normalizer":    "charset-normalizer",
-    "certifi":               "certifi",
-    "idna":                  "idna",
-    "wrapt":                 "wrapt",
-    "deprecated":            "Deprecated",
-    "appdirs":               "appdirs",
-    "platformdirs":          "platformdirs",
-    "packaging":             "packaging",
-    "setuptools":            "setuptools",
-    "pip":                   "pip",
-    "wheel":                 "wheel",
-    "Cython":                "Cython",
-    "numba":                 "numba",
-    "joblib":                "joblib",
-    "dill":                  "dill",
-    "cloudpickle":           "cloudpickle",
+    "pydantic": "pydantic",
+    "attrs": "attrs",
+    "marshmallow": "marshmallow",
+    "loguru": "loguru",
+    "arrow": "arrow",
+    "pendulum": "pendulum",
+    "dateutil": "python-dateutil",
+    "regex": "regex",
+    "chardet": "chardet",
+    "charset_normalizer": "charset-normalizer",
+    "certifi": "certifi",
+    "idna": "idna",
+    "wrapt": "wrapt",
+    "deprecated": "Deprecated",
+    "appdirs": "appdirs",
+    "platformdirs": "platformdirs",
+    "packaging": "packaging",
+    "setuptools": "setuptools",
+    "pip": "pip",
+    "wheel": "wheel",
+    "Cython": "Cython",
+    "numba": "numba",
+    "joblib": "joblib",
+    "dill": "dill",
+    "cloudpickle": "cloudpickle",
     # cross-encoder
-    "cross_encoder":         "sentence-transformers",
+    "cross_encoder": "sentence-transformers",
     # Telegram / messaging
-    "telegram":              "python-telegram-bot",
-    "telebot":               "pyTelegramBotAPI",
-    "twilio":                "twilio",
-    "slack_sdk":             "slack-sdk",
-    "discord":               "discord.py",
+    "telegram": "python-telegram-bot",
+    "telebot": "pyTelegramBotAPI",
+    "twilio": "twilio",
+    "slack_sdk": "slack-sdk",
+    "discord": "discord.py",
     # Object detection
-    "ultralytics":           "ultralytics",
+    "ultralytics": "ultralytics",
     # RTF processing
-    "striprtf":              "striprtf",
+    "striprtf": "striprtf",
     # More web/doc
-    "docutils":              "docutils",
-    "sphinx":                "Sphinx",
-    "mako":                  "Mako",
-    "jinja2":                "Jinja2",
-    "markupsafe":            "MarkupSafe",
+    "docutils": "docutils",
+    "sphinx": "Sphinx",
+    "mako": "Mako",
+    "jinja2": "Jinja2",
+    "markupsafe": "MarkupSafe",
     # ORM / validation
-    "tortoise":              "tortoise-orm",
-    "beanie":                "beanie",
+    "tortoise": "tortoise-orm",
+    "beanie": "beanie",
 }
 
 # --- Short descriptions for common packages ----------------------------------
 LIB_DESCRIPTIONS = {
-    "opencv-python":         "Computer vision & image processing",
-    "Pillow":                "Image manipulation",
-    "scikit-image":          "Image processing algorithms",
-    "scikit-learn":          "Machine learning toolkit",
-    "xgboost":               "Gradient boosting framework",
-    "tensorflow":            "Deep learning framework",
-    "torch":                 "PyTorch deep learning",
-    "torchvision":           "Vision models for PyTorch",
-    "transformers":          "Hugging Face NLP models",
+    "opencv-python": "Computer vision & image processing",
+    "Pillow": "Image manipulation",
+    "scikit-image": "Image processing algorithms",
+    "scikit-learn": "Machine learning toolkit",
+    "xgboost": "Gradient boosting framework",
+    "tensorflow": "Deep learning framework",
+    "torch": "PyTorch deep learning",
+    "torchvision": "Vision models for PyTorch",
+    "transformers": "Hugging Face NLP models",
     "sentence-transformers": "Sentence & text embeddings",
-    "huggingface-hub":       "Hugging Face model hub client",
-    "datasets":              "Hugging Face datasets library",
-    "faiss-cpu":             "Similarity search / vector index",
-    "faster-whisper":        "Fast speech-to-text (CTranslate2)",
-    "openai-whisper":        "OpenAI Whisper speech-to-text",
-    "openai":                "OpenAI API client",
-    "anthropic":             "Anthropic Claude API client",
-    "langchain":             "LLM application framework",
-    "langchain-core":        "LangChain core abstractions",
-    "langchain-community":   "LangChain community integrations",
-    "llama-cpp-python":      "llama.cpp Python bindings",
-    "chromadb":              "Chroma vector database",
-    "pinecone-client":       "Pinecone vector database client",
-    "rank-bm25":             "BM25 ranking for information retrieval",
-    "PyYAML":                "YAML parser & emitter",
-    "beautifulsoup4":        "HTML/XML parsing",
-    "lxml":                  "Fast XML/HTML processing",
-    "Flask":                 "Lightweight web framework",
-    "Django":                "Full-stack web framework",
-    "fastapi":               "Modern async API framework",
-    "uvicorn":               "ASGI server",
-    "starlette":             "ASGI toolkit",
-    "nicegui":               "Web-based GUI framework",
-    "httpx":                 "Async-capable HTTP client",
-    "aiohttp":               "Async HTTP client/server",
-    "requests":              "HTTP client",
-    "websocket-client":      "WebSocket client",
-    "websockets":            "WebSocket client & server",
-    "pymongo":               "MongoDB driver",
-    "redis":                 "Redis client",
-    "psycopg2-binary":       "PostgreSQL adapter",
-    "SQLAlchemy":            "SQL toolkit & ORM",
-    "qdrant-client":         "Qdrant vector database client",
-    "PyMuPDF":               "PDF/document processing (MuPDF)",
-    "pypdf":                 "Pure-Python PDF library",
-    "PyPDF2":                "PDF processing (legacy)",
-    "pdfplumber":            "PDF text/table extraction",
-    "python-docx":           "Word document processing",
-    "openpyxl":              "Excel file processing",
-    "pytesseract":           "OCR (Tesseract wrapper)",
-    "pycryptodome":          "Cryptographic primitives",
-    "PyJWT":                 "JSON Web Tokens",
-    "tqdm":                  "Progress bars",
-    "rich":                  "Rich terminal formatting",
-    "click":                 "CLI framework",
-    "typer":                 "Modern CLI framework",
-    "colorama":              "Cross-platform colored terminal text",
-    "matplotlib":            "Plotting & visualization",
-    "seaborn":               "Statistical data visualization",
-    "plotly":                "Interactive plots",
-    "numpy":                 "Numerical computing",
-    "pandas":                "Data analysis & manipulation",
-    "scipy":                 "Scientific computing",
-    "polars":                "Fast DataFrame library",
-    "pyarrow":               "Apache Arrow for columnar data",
-    "sounddevice":           "Audio I/O",
-    "pyttsx3":               "Offline text-to-speech",
-    "pydub":                 "Audio manipulation",
-    "librosa":               "Audio analysis",
-    "psutil":                "System & process utilities",
-    "watchdog":              "Filesystem event monitoring",
-    "python-dotenv":         "Load .env files",
-    "python-decouple":       "Settings management",
-    "pytest":                "Testing framework",
-    "respx":                 "HTTPX mock transport for tests",
-    "hypothesis":            "Property-based testing",
-    "Faker":                 "Fake data generation",
-    "streamlit":             "Data app framework",
-    "gradio":                "ML demo UI framework",
-    "pydantic":              "Data validation with type hints",
-    "loguru":                "Simplified logging",
-    "python-dateutil":       "Date/time utilities",
-    "regex":                 "Advanced regular expressions",
-    "chardet":               "Character encoding detection",
-    "packaging":             "Python packaging utilities",
-    "setuptools":            "Build system / package tools",
-    "joblib":                "Lightweight pipelining / caching",
-    "hf-transfer":           "Fast Hugging Face downloads",
-    "numba":                 "JIT compiler for numerical code",
-    "python-telegram-bot":   "Telegram Bot API client",
-    "pyTelegramBotAPI":      "Telegram Bot API (telebot)",
-    "twilio":                "Twilio SMS/voice API client",
-    "slack-sdk":             "Slack API client",
-    "discord.py":            "Discord bot framework",
-    "ultralytics":           "YOLOv8+ object detection",
-    "striprtf":              "RTF to plain text conversion",
-    "Jinja2":                "Template engine",
-    "MarkupSafe":            "Safe string markup",
-    "Sphinx":                "Documentation generator",
-    "tortoise-orm":          "Async ORM for Python",
-    "pip":                   "Python package installer",
+    "huggingface-hub": "Hugging Face model hub client",
+    "datasets": "Hugging Face datasets library",
+    "faiss-cpu": "Similarity search / vector index",
+    "faster-whisper": "Fast speech-to-text (CTranslate2)",
+    "openai-whisper": "OpenAI Whisper speech-to-text",
+    "openai": "OpenAI API client",
+    "anthropic": "Anthropic Claude API client",
+    "langchain": "LLM application framework",
+    "langchain-core": "LangChain core abstractions",
+    "langchain-community": "LangChain community integrations",
+    "llama-cpp-python": "llama.cpp Python bindings",
+    "chromadb": "Chroma vector database",
+    "pinecone-client": "Pinecone vector database client",
+    "rank-bm25": "BM25 ranking for information retrieval",
+    "PyYAML": "YAML parser & emitter",
+    "beautifulsoup4": "HTML/XML parsing",
+    "lxml": "Fast XML/HTML processing",
+    "Flask": "Lightweight web framework",
+    "Django": "Full-stack web framework",
+    "fastapi": "Modern async API framework",
+    "uvicorn": "ASGI server",
+    "starlette": "ASGI toolkit",
+    "nicegui": "Web-based GUI framework",
+    "httpx": "Async-capable HTTP client",
+    "aiohttp": "Async HTTP client/server",
+    "requests": "HTTP client",
+    "websocket-client": "WebSocket client",
+    "websockets": "WebSocket client & server",
+    "pymongo": "MongoDB driver",
+    "redis": "Redis client",
+    "psycopg2-binary": "PostgreSQL adapter",
+    "SQLAlchemy": "SQL toolkit & ORM",
+    "qdrant-client": "Qdrant vector database client",
+    "PyMuPDF": "PDF/document processing (MuPDF)",
+    "pypdf": "Pure-Python PDF library",
+    "PyPDF2": "PDF processing (legacy)",
+    "pdfplumber": "PDF text/table extraction",
+    "python-docx": "Word document processing",
+    "openpyxl": "Excel file processing",
+    "pytesseract": "OCR (Tesseract wrapper)",
+    "pycryptodome": "Cryptographic primitives",
+    "PyJWT": "JSON Web Tokens",
+    "tqdm": "Progress bars",
+    "rich": "Rich terminal formatting",
+    "click": "CLI framework",
+    "typer": "Modern CLI framework",
+    "colorama": "Cross-platform colored terminal text",
+    "matplotlib": "Plotting & visualization",
+    "seaborn": "Statistical data visualization",
+    "plotly": "Interactive plots",
+    "numpy": "Numerical computing",
+    "pandas": "Data analysis & manipulation",
+    "scipy": "Scientific computing",
+    "polars": "Fast DataFrame library",
+    "pyarrow": "Apache Arrow for columnar data",
+    "sounddevice": "Audio I/O",
+    "pyttsx3": "Offline text-to-speech",
+    "pydub": "Audio manipulation",
+    "librosa": "Audio analysis",
+    "psutil": "System & process utilities",
+    "watchdog": "Filesystem event monitoring",
+    "python-dotenv": "Load .env files",
+    "python-decouple": "Settings management",
+    "pytest": "Testing framework",
+    "respx": "HTTPX mock transport for tests",
+    "hypothesis": "Property-based testing",
+    "Faker": "Fake data generation",
+    "streamlit": "Data app framework",
+    "gradio": "ML demo UI framework",
+    "pydantic": "Data validation with type hints",
+    "loguru": "Simplified logging",
+    "python-dateutil": "Date/time utilities",
+    "regex": "Advanced regular expressions",
+    "chardet": "Character encoding detection",
+    "packaging": "Python packaging utilities",
+    "setuptools": "Build system / package tools",
+    "joblib": "Lightweight pipelining / caching",
+    "hf-transfer": "Fast Hugging Face downloads",
+    "numba": "JIT compiler for numerical code",
+    "python-telegram-bot": "Telegram Bot API client",
+    "pyTelegramBotAPI": "Telegram Bot API (telebot)",
+    "twilio": "Twilio SMS/voice API client",
+    "slack-sdk": "Slack API client",
+    "discord.py": "Discord bot framework",
+    "ultralytics": "YOLOv8+ object detection",
+    "striprtf": "RTF to plain text conversion",
+    "Jinja2": "Template engine",
+    "MarkupSafe": "Safe string markup",
+    "Sphinx": "Documentation generator",
+    "tortoise-orm": "Async ORM for Python",
+    "pip": "Python package installer",
 }
 
 
@@ -421,15 +605,15 @@ LIB_DESCRIPTIONS = {
 # =============================================================================
 
 DEFAULTS = {
-    "path": None,               # None = scan directory containing this script
-    "output": None,             # None = auto-name based on format
-    "format": "txt",            # "txt" or "toml" 
+    "path": None,  # None = scan directory containing this script
+    "output": None,  # None = auto-name based on format
+    "format": "txt",  # "txt" or "toml"
     "interactive_graph": True,  # Generate import_graph.html
-    "graph": False,             # Generate import_graph.dot (Graphviz)
-    "summary": True,            # Show package summary in console
-    "verbose": False,           # Show detailed import locations
-    "clean_pycache": False,     # Remove __pycache__ before scanning
-    "stats": False,             # Show usage statistics
+    "graph": False,  # Generate import_graph.dot (Graphviz)
+    "summary": True,  # Show package summary in console
+    "verbose": False,  # Show detailed import locations
+    "clean_pycache": False,  # Remove __pycache__ before scanning
+    "stats": False,  # Show usage statistics
 }
 
 # =============================================================================
@@ -440,6 +624,7 @@ DEFAULTS = {
 VERSION = "3.0.0"
 SCRIPT_NAME = "x_ray_project"
 
+
 def parse_args():
     """Build and return the CLI argument parser."""
     p = argparse.ArgumentParser(
@@ -447,71 +632,170 @@ def parse_args():
         description="Universal Python dependency analyzer & requirements generator.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Examples:\n"
-               "  python x_ray_project.py --format toml         # write pyproject.toml dependencies\n"
-               "  python x_ray_project.py --interactive-graph   # generate interactive HTML graph\n",
+        "  python x_ray_project.py --format toml         # write pyproject.toml dependencies\n"
+        "  python x_ray_project.py --interactive-graph   # generate interactive HTML graph\n",
     )
-    p.add_argument("--path",           type=str, default=DEFAULTS["path"],
-                   help="Project root to scan (default: directory containing this script).")
-    p.add_argument("--output", "-o",   type=str, default=DEFAULTS["output"],
-                   help="Output filename (default: requirements.txt or pyproject.toml based on format).")
-    p.add_argument("--format",         type=str, choices=["txt", "toml"], default=DEFAULTS["format"],
-                   help="Output format: 'txt' (requirements.txt) or 'toml' (pyproject.toml).")
-    p.add_argument("--summary",        action="store_true", default=DEFAULTS["summary"],
-                   help="Show summary of detected packages (default).")
-    p.add_argument("--verbose", "-v",  action="store_true", default=DEFAULTS["verbose"],
-                   help="Show per-import file:line details & frequency.")
-    p.add_argument("--exclude",        nargs="*", default=[],
-                   help="Folder prefixes to skip (space-separated).")
-    p.add_argument("--include",        nargs="*", default=[],
-                   help="Only scan these folder prefixes.")
-    p.add_argument("--merge",          type=str, default=None,
-                   help="Merge with an existing requirements file (preserves comments/pins).")
-    p.add_argument("--interactive",    action="store_true",
-                   help="Interactively review packages before writing.")
-    p.add_argument("--graph",          action="store_true", default=DEFAULTS["graph"],
-                   help="Write import_graph.dot (Graphviz).")
-    p.add_argument("--interactive-graph", action="store_true", default=DEFAULTS["interactive_graph"],
-                   help="Write import_graph.html (Interactive).")
-    p.add_argument("--stats",          action="store_true", default=DEFAULTS["stats"],
-                   help="Print usage-frequency statistics.")
-    p.add_argument("--clean-pycache",  action="store_true", default=DEFAULTS["clean_pycache"],
-                   help="Delete all __pycache__ folders before scanning.")
-    p.add_argument("--find-orphans",   action="store_true",
-                   help="Report .py files unreachable from detected entrypoints.")
-    p.add_argument("--entrypoints",    nargs="*", default=None,
-                   help="Entrypoint filenames for orphan detection (default: auto-detect).")
-    p.add_argument("--ci",             action="store_true",
-                   help="Fail (exit 1) if unapproved packages found (needs approved.txt).")
-    p.add_argument("--no-pin",         action="store_true",
-                   help="Do not pin versions in the output.")
-    p.add_argument("--no-descriptions", action="store_true",
-                   help="Do not add # description comments in the output.")
+    p.add_argument(
+        "--path",
+        type=str,
+        default=DEFAULTS["path"],
+        help="Project root to scan (default: directory containing this script).",
+    )
+    p.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default=DEFAULTS["output"],
+        help="Output filename (default: requirements.txt or pyproject.toml based on format).",
+    )
+    p.add_argument(
+        "--format",
+        type=str,
+        choices=["txt", "toml"],
+        default=DEFAULTS["format"],
+        help="Output format: 'txt' (requirements.txt) or 'toml' (pyproject.toml).",
+    )
+    p.add_argument(
+        "--summary",
+        action="store_true",
+        default=DEFAULTS["summary"],
+        help="Show summary of detected packages (default).",
+    )
+    p.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        default=DEFAULTS["verbose"],
+        help="Show per-import file:line details & frequency.",
+    )
+    p.add_argument(
+        "--exclude",
+        nargs="*",
+        default=[],
+        help="Folder prefixes to skip (space-separated).",
+    )
+    p.add_argument(
+        "--include", nargs="*", default=[], help="Only scan these folder prefixes."
+    )
+    p.add_argument(
+        "--merge",
+        type=str,
+        default=None,
+        help="Merge with an existing requirements file (preserves comments/pins).",
+    )
+    p.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Interactively review packages before writing.",
+    )
+    p.add_argument(
+        "--graph",
+        action="store_true",
+        default=DEFAULTS["graph"],
+        help="Write import_graph.dot (Graphviz).",
+    )
+    p.add_argument(
+        "--interactive-graph",
+        action="store_true",
+        default=DEFAULTS["interactive_graph"],
+        help="Write import_graph.html (Interactive).",
+    )
+    p.add_argument(
+        "--stats",
+        action="store_true",
+        default=DEFAULTS["stats"],
+        help="Print usage-frequency statistics.",
+    )
+    p.add_argument(
+        "--clean-pycache",
+        action="store_true",
+        default=DEFAULTS["clean_pycache"],
+        help="Delete all __pycache__ folders before scanning.",
+    )
+    p.add_argument(
+        "--find-orphans",
+        action="store_true",
+        help="Report .py files unreachable from detected entrypoints.",
+    )
+    p.add_argument(
+        "--entrypoints",
+        nargs="*",
+        default=None,
+        help="Entrypoint filenames for orphan detection (default: auto-detect).",
+    )
+    p.add_argument(
+        "--ci",
+        action="store_true",
+        help="Fail (exit 1) if unapproved packages found (needs approved.txt).",
+    )
+    p.add_argument(
+        "--no-pin", action="store_true", help="Do not pin versions in the output."
+    )
+    p.add_argument(
+        "--no-descriptions",
+        action="store_true",
+        help="Do not add # description comments in the output.",
+    )
     # ── Project health & structure ──
-    p.add_argument("--health",         action="store_true",
-                   help="Run full project health check (structure, junk, essentials, misplaced files).")
-    p.add_argument("--check-structure", action="store_true",
-                   help="Analyze project directory structure and suggest improvements.")
-    p.add_argument("--check-junk",     action="store_true",
-                   help="Detect junk, backup, and temp files.")
-    p.add_argument("--check-essentials", action="store_true",
-                   help="Check for missing essential files (README, .gitignore, LICENSE, etc.).")
-    p.add_argument("--check-misplaced", action="store_true",
-                   help="Detect files that are likely in the wrong directory.")
-    p.add_argument("--fix-gitignore",  action="store_true",
-                   help="Generate or update .gitignore with Python best practices.")
-    p.add_argument("--version",        action="version", version=f"%(prog)s {__version__}")
+    p.add_argument(
+        "--health",
+        action="store_true",
+        help="Run full project health check (structure, junk, essentials, misplaced files).",
+    )
+    p.add_argument(
+        "--check-structure",
+        action="store_true",
+        help="Analyze project directory structure and suggest improvements.",
+    )
+    p.add_argument(
+        "--check-junk", action="store_true", help="Detect junk, backup, and temp files."
+    )
+    p.add_argument(
+        "--check-essentials",
+        action="store_true",
+        help="Check for missing essential files (README, .gitignore, LICENSE, etc.).",
+    )
+    p.add_argument(
+        "--check-misplaced",
+        action="store_true",
+        help="Detect files that are likely in the wrong directory.",
+    )
+    p.add_argument(
+        "--fix-gitignore",
+        action="store_true",
+        help="Generate or update .gitignore with Python best practices.",
+    )
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
 
 # --- File collection ----------------------------------------------------------
 
-_ALWAYS_SKIP = frozenset({
-    ".git", ".hg", ".svn", "__pycache__", ".mypy_cache", ".pytest_cache",
-    ".tox", ".nox", ".eggs", "node_modules",
-    "venv", ".venv", "env", ".env",
-    "site-packages", "dist-packages",
-    "_archive", "_Old", "_old", "_bin",
-})
+_ALWAYS_SKIP = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".tox",
+        ".nox",
+        ".eggs",
+        "node_modules",
+        "venv",
+        ".venv",
+        "env",
+        ".env",
+        "site-packages",
+        "dist-packages",
+        "_archive",
+        "_Old",
+        "_old",
+        "_bin",
+    }
+)
+
 
 def collect_py_files(root, args):
     """Walk *root* and return .py files respecting include/exclude rules."""
@@ -531,7 +815,8 @@ def collect_py_files(root, args):
         rel_dir = os.path.relpath(dirpath, root)
         # prune dirs in-place
         dirnames[:] = [
-            d for d in dirnames
+            d
+            for d in dirnames
             if not _skip_dir(d, os.path.join(rel_dir, d) if rel_dir != "." else d)
         ]
         for fn in filenames:
@@ -543,14 +828,13 @@ def collect_py_files(root, args):
 # --- Import parsing -----------------------------------------------------------
 
 
-
 # --- Import parsing -----------------------------------------------------------
 
 
 def _parse_file(fpath):
     """Helper for parallel parsing. Captures syntax errors AND warnings."""
     import warnings
-    
+
     local_locs = []
     error = None
     try:
@@ -558,10 +842,10 @@ def _parse_file(fpath):
         try:
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")  # Ensure all warnings are captured
-                
+
                 source = fpath.read_text(encoding="utf-8", errors="ignore")
                 tree = ast.parse(source, filename=str(fpath))
-                
+
                 # Check for syntax warnings (like invalid escape sequences)
                 for warning in w:
                     if issubclass(warning.category, SyntaxWarning):
@@ -572,7 +856,7 @@ def _parse_file(fpath):
         except Exception as warn_err:
             # If warnings capture fails, log but continue
             logger.debug(f"Warning capture failed for {fpath}: {warn_err}")
-        
+
         # Only parse imports if no warnings
         if not error:
             for node in ast.walk(tree):
@@ -583,9 +867,9 @@ def _parse_file(fpath):
                 elif isinstance(node, ast.ImportFrom) and node.module:
                     mod = node.module.split(".")[0]
                     local_locs.append((mod, str(fpath), node.lineno))
-                    
+
     except (SyntaxError, ValueError):
-        pass # Ignore syntax errors (not a crash)
+        pass  # Ignore syntax errors (not a crash)
     except Exception as e:
         # Capture permission/OS errors
         error = (str(fpath), str(e))
@@ -593,33 +877,35 @@ def _parse_file(fpath):
 
     return local_locs, error
 
+
 def parse_imports(py_files):
     """Return {top_level_module: [(filepath, lineno), ...]} using parallel scanning."""
     locs = defaultdict(list)
     errors = []
     total = len(py_files)
     print(f"  Parsing {total} files (Parallel)...")
-    
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = list(executor.map(_parse_file, py_files))
-        
+
     for res, err in results:
         if err:
             errors.append(err)
         for mod, fpath, lineno in res:
             locs[mod].append((fpath, lineno))
-            
+
     if errors:
         print(f"\n  [!] Skipped {len(errors)} unreadable files:")
-        for path, reason in errors[:10]: # Limit spam
+        for path, reason in errors[:10]:  # Limit spam
             print(f"      - {os.path.basename(path)}: {reason}")
         if len(errors) > 10:
-            print(f"      ... and {len(errors)-10} more.")
+            print(f"      ... and {len(errors) - 10} more.")
 
     return dict(locs)
 
 
 # --- Local module detection ---------------------------------------------------
+
 
 def _find_top_level_modules(root):
     """Find local modules from top-level .py files and directories."""
@@ -663,7 +949,9 @@ def _find_deep_tree_modules(root, known_pypi):
             dirnames.clear()
             continue
         for d in dirnames:
-            if not (d.isidentifier() and not d.startswith(".") and d not in _ALWAYS_SKIP):
+            if not (
+                d.isidentifier() and not d.startswith(".") and d not in _ALWAYS_SKIP
+            ):
                 continue
             if d in known_pypi:
                 continue
@@ -673,7 +961,11 @@ def _find_deep_tree_modules(root, known_pypi):
         for fn in filenames:
             if fn.endswith(".py"):
                 stem = fn[:-3]
-                if stem.isidentifier() and not stem.startswith("_") and stem not in known_pypi:
+                if (
+                    stem.isidentifier()
+                    and not stem.startswith("_")
+                    and stem not in known_pypi
+                ):
                     local.add(stem)
     return local
 
@@ -689,9 +981,10 @@ def find_local_modules(root, py_files):
 
 # --- Filtering ----------------------------------------------------------------
 
+
 def filter_third_party(import_locs, local_modules):
     """Keep only genuine third-party imports.
-    
+
     A module is considered third-party if:
     - It's not in stdlib
     - It's not a detected local module (case-insensitive)
@@ -713,12 +1006,13 @@ def filter_third_party(import_locs, local_modules):
         # Must be either a known PyPI package or actually installed
         pkg = resolve_name(mod)
         if mod not in PYPI_MAP and get_installed_version(pkg) is None:
-            continue   # not a real third-party package
+            continue  # not a real third-party package
         result[mod] = locs
     return result
 
 
 # --- Resolution & versioning --------------------------------------------------
+
 
 def resolve_name(mod):
     """Map an import name to its PyPI package name."""
@@ -747,16 +1041,24 @@ def format_requirement(pkg, pin=True):
 
 # --- Merge --------------------------------------------------------------------
 
+
 def merge_with_existing(new_lines, merge_path):
     """Merge new requirements with an existing file, preserving comments & pins."""
-    existing_pkgs = {}          # lowercase-name -> original line
+    existing_pkgs = {}  # lowercase-name -> original line
     if os.path.exists(merge_path):
         with open(merge_path, "r", encoding="utf-8") as f:
             for raw in f:
                 line = raw.strip()
                 if not line or line.startswith("#"):
                     continue
-                name = line.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0].split("!=")[0].strip()
+                name = (
+                    line.split("==")[0]
+                    .split(">=")[0]
+                    .split("<=")[0]
+                    .split("~=")[0]
+                    .split("!=")[0]
+                    .strip()
+                )
                 existing_pkgs[name.lower()] = raw.rstrip("\n")
 
     # Build merged list: existing pins win, new packages are appended
@@ -773,7 +1075,7 @@ def merge_with_existing(new_lines, merge_path):
             continue
         seen.add(key)
         if key in existing_pkgs:
-            merged.append(existing_pkgs[key])       # keep existing pin
+            merged.append(existing_pkgs[key])  # keep existing pin
         else:
             merged.append(line)
     # Add anything from the old file that we didn't emit
@@ -785,6 +1087,7 @@ def merge_with_existing(new_lines, merge_path):
 
 
 # --- Interactive review -------------------------------------------------------
+
 
 def interactive_review(pkgs):
     """Let the user remove packages interactively."""
@@ -807,6 +1110,7 @@ def interactive_review(pkgs):
 
 # --- Pycache cleanup ----------------------------------------------------------
 
+
 def clean_pycache(root):
     """Remove all __pycache__ directories under *root*."""
     count = 0
@@ -824,15 +1128,29 @@ def clean_pycache(root):
 
 # --- Orphan file detection ----------------------------------------------------
 
-_DEFAULT_ENTRYPOINTS = frozenset({
-    "main.py", "__main__.py", "app.py", "app_new.py", "manage.py",
-    "wsgi.py", "asgi.py", "server.py", "run.py", "start.py",
-    "setup.py", "conftest.py",
-})
+_DEFAULT_ENTRYPOINTS = frozenset(
+    {
+        "main.py",
+        "__main__.py",
+        "app.py",
+        "app_new.py",
+        "manage.py",
+        "wsgi.py",
+        "asgi.py",
+        "server.py",
+        "run.py",
+        "start.py",
+        "setup.py",
+        "conftest.py",
+    }
+)
+
 
 def find_orphans(root, py_files, import_locs, custom_entrypoints=None):
     """Return .py files not reachable from any entrypoint via import graph."""
-    ep_names = set(custom_entrypoints) if custom_entrypoints else set(_DEFAULT_ENTRYPOINTS)
+    ep_names = (
+        set(custom_entrypoints) if custom_entrypoints else set(_DEFAULT_ENTRYPOINTS)
+    )
 
     file_to_module = {}
     module_to_files = defaultdict(set)
@@ -936,18 +1254,25 @@ def _build_graph_data(third_party, root):
 
     table_rows = []
     for fname, metrics in sorted(file_metrics.items()):
-        table_rows.append({
-            "type": "file", "name": fname,
-            "size_kb": round(metrics["size"] / 1024, 1),
-            "imports_count": len(metrics["imports"]),
-            "imports": ", ".join(sorted(metrics["imports"])[:5]),
-        })
+        table_rows.append(
+            {
+                "type": "file",
+                "name": fname,
+                "size_kb": round(metrics["size"] / 1024, 1),
+                "imports_count": len(metrics["imports"]),
+                "imports": ", ".join(sorted(metrics["imports"])[:5]),
+            }
+        )
     for pkg, metrics in sorted(package_metrics.items()):
-        table_rows.append({
-            "type": "package", "name": pkg, "size_kb": "-",
-            "imports_count": len(metrics["files"]),
-            "imports": f"Used by {len(metrics['files'])} files ({metrics['usage_count']} times)",
-        })
+        table_rows.append(
+            {
+                "type": "package",
+                "name": pkg,
+                "size_kb": "-",
+                "imports_count": len(metrics["files"]),
+                "imports": f"Used by {len(metrics['files'])} files ({metrics['usage_count']} times)",
+            }
+        )
     return nodes, edges, file_metrics, package_metrics, table_rows
 
 
@@ -1064,7 +1389,9 @@ def _graph_javascript():
 def write_interactive_graph(third_party, root):
     """Generate a standalone HTML file with an interactive dependency graph + table view."""
     html_path = root / "import_graph.html"
-    nodes, edges, file_metrics, package_metrics, table_rows = _build_graph_data(third_party, root)
+    nodes, edges, file_metrics, package_metrics, table_rows = _build_graph_data(
+        third_party, root
+    )
     data_json = json.dumps({"nodes": nodes, "edges": edges})
     table_json = json.dumps(table_rows)
     css = _graph_css()
@@ -1103,53 +1430,72 @@ def write_interactive_graph(third_party, root):
     print("    - Table view: Sortable, searchable list with metrics")
 
 
-
 # =============================================================================
 #  Project health & structure analysis
 # =============================================================================
 
 # ── Junk / backup / temp file detection ──────────────────────────────────────
 
-_JUNK_EXTENSIONS = frozenset({
-    ".pyc", ".pyo", ".bak", ".swp", ".swo", ".tmp", ".temp",
-    ".orig", ".rej", ".log", ".DS_Store",
-})
+_JUNK_EXTENSIONS = frozenset(
+    {
+        ".pyc",
+        ".pyo",
+        ".bak",
+        ".swp",
+        ".swo",
+        ".tmp",
+        ".temp",
+        ".orig",
+        ".rej",
+        ".log",
+        ".DS_Store",
+    }
+)
 
 _JUNK_PATTERNS = (
     # backup naming patterns
-    lambda n: n.endswith("~"),                    # file~ (editor backup)
-    lambda n: ".~" in n,                          # file.~py
-    lambda n: n.startswith("~$"),                 # ~$file (Office lock)
+    lambda n: n.endswith("~"),  # file~ (editor backup)
+    lambda n: ".~" in n,  # file.~py
+    lambda n: n.startswith("~$"),  # ~$file (Office lock)
     lambda n: n == "Thumbs.db",
     lambda n: n == ".DS_Store",
     lambda n: n == "desktop.ini",
     lambda n: n.endswith(".pyc"),
-    lambda n: n.startswith(".#"),                  # Emacs lock files
-    lambda n: n == "New Text Document.txt",        # Windows default
+    lambda n: n.startswith(".#"),  # Emacs lock files
+    lambda n: n == "New Text Document.txt",  # Windows default
 )
 
-_JUNK_DIR_NAMES = frozenset({
-    "__pycache__", ".mypy_cache", ".pytest_cache", ".tox", ".nox",
-    ".eggs", "*.egg-info", ".ipynb_checkpoints",
-})
+_JUNK_DIR_NAMES = frozenset(
+    {
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".tox",
+        ".nox",
+        ".eggs",
+        "*.egg-info",
+        ".ipynb_checkpoints",
+    }
+)
+
 
 def find_junk_files(root):
     """Find junk, backup, temp, and cache files/directories in the project."""
     junk_files = []
     junk_dirs = []
-    
+
     for dirpath, dirnames, filenames in os.walk(root):
         rel = os.path.relpath(dirpath, root)
         # Skip .git internals
         if ".git" in rel.split(os.sep):
             dirnames.clear()
             continue
-        
+
         # Check directory names
         for d in list(dirnames):
             if d in _JUNK_DIR_NAMES or d.endswith(".egg-info"):
                 junk_dirs.append(os.path.join(rel, d) if rel != "." else d)
-        
+
         # Check files
         for fn in filenames:
             _, ext = os.path.splitext(fn)
@@ -1158,7 +1504,7 @@ def find_junk_files(root):
                 is_junk = any(p(fn) for p in _JUNK_PATTERNS)
             if is_junk:
                 junk_files.append(os.path.join(rel, fn) if rel != "." else fn)
-    
+
     return junk_files, junk_dirs
 
 
@@ -1167,53 +1513,54 @@ def find_junk_files(root):
 _ESSENTIAL_FILES = {
     "README.md": {
         "alts": ["README.rst", "README.txt", "README"],
-        "why":  "Project overview for GitHub & newcomers",
+        "why": "Project overview for GitHub & newcomers",
         "priority": "HIGH",
     },
     ".gitignore": {
         "alts": [],
-        "why":  "Prevents committing pycache, venv, secrets, etc.",
+        "why": "Prevents committing pycache, venv, secrets, etc.",
         "priority": "HIGH",
     },
     "requirements.txt": {
         "alts": ["pyproject.toml", "setup.cfg", "Pipfile"],
-        "why":  "Declares project dependencies",
+        "why": "Declares project dependencies",
         "priority": "HIGH",
     },
     "LICENSE": {
         "alts": ["LICENSE.md", "LICENSE.txt", "LICENCE"],
-        "why":  "Legal terms for open-source distribution",
+        "why": "Legal terms for open-source distribution",
         "priority": "MEDIUM",
     },
     ".streamlit/config.toml": {
         "alts": [],
-        "why":  "Streamlit app configuration",
+        "why": "Streamlit app configuration",
         "priority": "LOW",
         "condition": "streamlit",  # only check if streamlit is a dependency
     },
     "pytest.ini": {
         "alts": ["pyproject.toml", "setup.cfg", "tox.ini"],
-        "why":  "Test configuration",
+        "why": "Test configuration",
         "priority": "LOW",
         "condition": "pytest",
     },
 }
+
 
 def check_essentials(root, third_party_names=None):
     """Check for missing essential project files."""
     missing = []
     present = []
     third_party_names = third_party_names or set()
-    
+
     for name, info in _ESSENTIAL_FILES.items():
         # Check condition (only check if the related package is used)
         cond = info.get("condition")
         if cond and cond not in third_party_names:
             continue
-        
+
         found = False
         found_as = name
-        
+
         # Check primary name
         if (root / name).exists():
             found = True
@@ -1224,12 +1571,12 @@ def check_essentials(root, third_party_names=None):
                     found = True
                     found_as = alt
                     break
-        
+
         if found:
             present.append((name, found_as))
         else:
             missing.append((name, info["why"], info["priority"]))
-    
+
     return present, missing
 
 
@@ -1251,59 +1598,85 @@ _PLACEMENT_RULES = [
     },
     # Documentation files
     {
-        "check": lambda rel, fn: fn.endswith(".md") and fn not in {"README.md", "CHANGELOG.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md"},
+        "check": lambda rel, fn: (
+            fn.endswith(".md")
+            and fn
+            not in {
+                "README.md",
+                "CHANGELOG.md",
+                "CONTRIBUTING.md",
+                "CODE_OF_CONDUCT.md",
+            }
+        ),
         "expected_dirs": {"docs", "Docs", "doc", "."},
         "description": "Documentation should be in docs/ directory",
     },
     # Shell scripts / batch files at root or scripts/
     {
-        "check": lambda rel, fn: fn.endswith((".sh", ".bat", ".ps1")) and not fn.startswith("."),
+        "check": lambda rel, fn: (
+            fn.endswith((".sh", ".bat", ".ps1")) and not fn.startswith(".")
+        ),
         "expected_dirs": {".", "scripts", "bin", "tools"},
         "description": "Scripts should be at root or in scripts/ directory",
     },
     # Config/settings files
     {
-        "check": lambda rel, fn: fn in {"config.yaml", "config.yml", "config.json", "config.toml", "settings.yaml", "settings.json"},
+        "check": lambda rel, fn: (
+            fn
+            in {
+                "config.yaml",
+                "config.yml",
+                "config.json",
+                "config.toml",
+                "settings.yaml",
+                "settings.json",
+            }
+        ),
         "expected_dirs": {".", "config", "conf", ".streamlit"},
         "description": "Config files should be at root or in config/ directory",
     },
 ]
 
+
 def find_misplaced_files(root):
     """Detect files that appear to be in the wrong directory."""
     misplaced = []
-    
+
     for dirpath, dirnames, filenames in os.walk(root):
         rel_dir = os.path.relpath(dirpath, root)
         # Skip hidden/internal dirs
         parts = rel_dir.split(os.sep) if rel_dir != "." else []
         if any(p.startswith(".") or p.startswith("_") for p in parts):
             continue
-        
+
         top_dir = parts[0] if parts else "."
-        
+
         for fn in filenames:
             for rule in _PLACEMENT_RULES:
                 if rule["check"](rel_dir, fn):
                     if top_dir not in rule["expected_dirs"]:
                         rel_file = os.path.join(rel_dir, fn) if rel_dir != "." else fn
-                        expected = " or ".join(sorted(rule["expected_dirs"] - {"."})) or "project root"
+                        expected = (
+                            " or ".join(sorted(rule["expected_dirs"] - {"."}))
+                            or "project root"
+                        )
                         misplaced.append((rel_file, rule["description"], expected))
                     break  # only match first rule per file
-    
+
     return misplaced
 
 
 # ── Project structure analysis ───────────────────────────────────────────────
 
 _STANDARD_DIRS = {
-    "tests":    "Unit & integration tests",
-    "docs":     "Documentation",
-    "scripts":  "Helper/maintenance scripts",
-    "config":   "Configuration files",
-    "ui":       "UI components (Streamlit, etc.)",
-    "i18n":     "Internationalization / locales",
+    "tests": "Unit & integration tests",
+    "docs": "Documentation",
+    "scripts": "Helper/maintenance scripts",
+    "config": "Configuration files",
+    "ui": "UI components (Streamlit, etc.)",
+    "i18n": "Internationalization / locales",
 }
+
 
 def _gather_file_stats(root, py_files, third_party):
     """Gather file statistics for the project structure report."""
@@ -1327,11 +1700,19 @@ def _gather_file_stats(root, py_files, third_party):
         except OSError:
             pass
     largest_files.sort(key=lambda x: x[1], reverse=True)
-    return {
-        "total_py_files": len(py_files), "total_lines": total_lines,
-        "root_files": root_file_count, "directories": dict(dir_counts),
-        "largest_files": largest_files[:10], "third_party_count": len(third_party),
-    }, root_file_count, dir_counts, largest_files
+    return (
+        {
+            "total_py_files": len(py_files),
+            "total_lines": total_lines,
+            "root_files": root_file_count,
+            "directories": dict(dir_counts),
+            "largest_files": largest_files[:10],
+            "third_party_count": len(third_party),
+        },
+        root_file_count,
+        dir_counts,
+        largest_files,
+    )
 
 
 def _check_root_clutter(report, root_file_count):
@@ -1339,10 +1720,13 @@ def _check_root_clutter(report, root_file_count):
     if root_file_count > 10:
         report["issues"].append(
             f"ROOT CLUTTER: {root_file_count} Python files at project root. "
-            f"Consider moving source code into a src/ or core/ package.")
+            f"Consider moving source code into a src/ or core/ package."
+        )
         report["score"] -= min(15, root_file_count - 10)
     elif root_file_count <= 5:
-        report["good"].append(f"Clean root: only {root_file_count} Python files at project root.")
+        report["good"].append(
+            f"Clean root: only {root_file_count} Python files at project root."
+        )
 
 
 def _check_tests(report, dir_counts, py_files):
@@ -1350,15 +1734,20 @@ def _check_tests(report, dir_counts, py_files):
     tests_dir = any(d in dir_counts for d in ("tests", "test", "Tests"))
     if tests_dir:
         test_count = sum(dir_counts.get(d, 0) for d in ("tests", "test", "Tests"))
-        report["good"].append(f"Tests directory present with {test_count} test file(s).")
+        report["good"].append(
+            f"Tests directory present with {test_count} test file(s)."
+        )
     else:
         scattered_tests = [f for f in py_files if f.name.startswith("test_")]
         if scattered_tests:
             report["issues"].append(
-                f"SCATTERED TESTS: {len(scattered_tests)} test file(s) found outside tests/ directory.")
+                f"SCATTERED TESTS: {len(scattered_tests)} test file(s) found outside tests/ directory."
+            )
             report["score"] -= 10
         else:
-            report["issues"].append("NO TESTS: No test files or tests/ directory found.")
+            report["issues"].append(
+                "NO TESTS: No test files or tests/ directory found."
+            )
             report["score"] -= 15
 
 
@@ -1375,31 +1764,40 @@ def _check_init_files(report, root):
         if py_in_dir and "__init__.py" not in filenames:
             if parts[0] not in ("scripts", "bin", "tools", "docs", "Docs"):
                 report["issues"].append(
-                    f"MISSING __init__.py: {rel}/ has {len(py_in_dir)} Python files but no __init__.py")
+                    f"MISSING __init__.py: {rel}/ has {len(py_in_dir)} Python files but no __init__.py"
+                )
                 report["score"] -= 2
 
 
 def analyze_structure(root, py_files, third_party):
     """Analyze overall project structure and return a health report."""
     report = {"score": 100, "issues": [], "good": [], "stats": {}}
-    stats, root_file_count, dir_counts, largest_files = _gather_file_stats(root, py_files, third_party)
+    stats, root_file_count, dir_counts, largest_files = _gather_file_stats(
+        root, py_files, third_party
+    )
     report["stats"] = stats
 
     _check_root_clutter(report, root_file_count)
     _check_tests(report, dir_counts, py_files)
 
     # Check: docs directory
-    docs_exists = (root / "docs").exists() or (root / "Docs").exists() or (root / "doc").exists()
+    docs_exists = (
+        (root / "docs").exists() or (root / "Docs").exists() or (root / "doc").exists()
+    )
     if docs_exists:
         report["good"].append("Documentation directory present.")
     else:
-        report["issues"].append("NO DOCS: Consider adding a docs/ directory for project documentation.")
+        report["issues"].append(
+            "NO DOCS: Consider adding a docs/ directory for project documentation."
+        )
         report["score"] -= 5
 
     # Check: very large files
     for fpath, lines in largest_files[:5]:
         if lines > 1000:
-            report["issues"].append(f"LARGE FILE: {fpath} has {lines:,} lines. Consider splitting into modules.")
+            report["issues"].append(
+                f"LARGE FILE: {fpath} has {lines:,} lines. Consider splitting into modules."
+            )
             report["score"] -= 3
 
     _check_init_files(report, root)
@@ -1465,22 +1863,31 @@ uploads/
 secrets/
 """
 
+
 def generate_gitignore(root):
     """Generate or update .gitignore with Python best practices."""
     gitignore_path = root / ".gitignore"
-    
+
     if gitignore_path.exists():
         existing = gitignore_path.read_text(encoding="utf-8")
         # Find lines in template that are missing from existing
-        existing_lines = {ln.strip() for ln in existing.splitlines() if ln.strip() and not ln.startswith("#")}
+        existing_lines = {
+            ln.strip()
+            for ln in existing.splitlines()
+            if ln.strip() and not ln.startswith("#")
+        }
         template_lines = [ln for ln in _GITIGNORE_PYTHON.splitlines()]
-        
+
         additions = []
         for line in template_lines:
             stripped = line.strip()
-            if stripped and not stripped.startswith("#") and stripped not in existing_lines:
+            if (
+                stripped
+                and not stripped.startswith("#")
+                and stripped not in existing_lines
+            ):
                 additions.append(line)
-        
+
         if additions:
             with open(gitignore_path, "a", encoding="utf-8", newline="\n") as f:
                 f.write("\n# === Added by x_ray_project ===\n")
@@ -1496,6 +1903,7 @@ def generate_gitignore(root):
 
 
 # ── Print health report ──────────────────────────────────────────────────────
+
 
 def _score_to_grade(score):
     """Convert numeric score to letter grade string."""
@@ -1573,14 +1981,14 @@ def _print_junk_section(root):
 
 def print_health_report(root, py_files, third_party, third_party_names):
     """Run all health checks and print a comprehensive report."""
-    print(f"\n  {'='*56}")
+    print(f"\n  {'=' * 56}")
     print("    PROJECT HEALTH REPORT")
-    print(f"  {'='*56}\n")
+    print(f"  {'=' * 56}\n")
 
     report = analyze_structure(root, py_files, third_party)
     grade = _score_to_grade(report["score"])
     print(f"    Health Score:  {report['score']}/100  {grade}")
-    print(f"    {'─'*50}")
+    print(f"    {'─' * 50}")
 
     _print_stats_and_issues(report["stats"], report)
     _print_essentials_section(root, third_party_names, report)
@@ -1596,9 +2004,9 @@ def print_health_report(root, py_files, third_party, third_party_names):
 
     _print_junk_section(root)
 
-    print(f"\n    {'─'*50}")
+    print(f"\n    {'─' * 50}")
     print(f"    Final Score:  {report['score']}/100  {grade}")
-    print(f"  {'='*56}\n")
+    print(f"  {'=' * 56}\n")
     return report
 
 
@@ -1623,7 +2031,7 @@ def _build_output_lines(args, unique, root):
             else:
                 ver_spec = '"*"'
             comment = f"  # {desc}" if (desc and not args.no_descriptions) else ""
-            output_lines.append(f'{pkg} = {ver_spec}{comment}')
+            output_lines.append(f"{pkg} = {ver_spec}{comment}")
     else:
         output_lines = [
             f"# Auto-generated by x_ray_project v{__version__}",
@@ -1650,7 +2058,8 @@ def _build_output_lines(args, unique, root):
             req_only = interactive_review(req_only)
             output_lines = [
                 f"# Auto-generated by x_ray_project v{__version__}",
-                f"# Project: {root.name}", "",
+                f"# Project: {root.name}",
+                "",
             ]
             for line in req_only:
                 pkg = line.split("==")[0].strip()
@@ -1679,7 +2088,9 @@ def _write_output(args, output_lines, unique, root, not_installed):
     print(f"\n  Written -> {out_path}  ({len(unique)} packages)")
 
     if not_installed:
-        print(f"  WARNING: {len(not_installed)} package(s) not installed locally (no version pin):")
+        print(
+            f"  WARNING: {len(not_installed)} package(s) not installed locally (no version pin):"
+        )
         for p in not_installed:
             print(f"       - {p}")
 
@@ -1711,18 +2122,20 @@ def _run_health_checks(args, root, py_files, third_party, unique):
     if args.health:
         print_health_report(root, py_files, third_party, third_party_names)
     else:
-        if getattr(args, 'check_structure', False):
+        if getattr(args, "check_structure", False):
             report = analyze_structure(root)
             print(f"\n  Structure Score: {report['score']}/100  ({report['grade']})")
-        if getattr(args, 'check_junk', False):
+        if getattr(args, "check_junk", False):
             junk_files, junk_dirs = find_junk_files(root)
             if junk_files or junk_dirs:
-                print(f"\n  Junk: {len(junk_files)} file(s), {len(junk_dirs)} cached dir(s)")
+                print(
+                    f"\n  Junk: {len(junk_files)} file(s), {len(junk_dirs)} cached dir(s)"
+                )
                 for f_name in junk_files[:10]:
                     print(f"       {f_name}")
             else:
                 print("\n  No junk files detected.")
-        if getattr(args, 'check_essentials', False):
+        if getattr(args, "check_essentials", False):
             present, missing = check_essentials(root, third_party_names)
             if missing:
                 print(f"\n  Missing essentials: {len(missing)}")
@@ -1730,7 +2143,7 @@ def _run_health_checks(args, root, py_files, third_party, unique):
                     print(f"       [{priority}] {name}: {why}")
             else:
                 print("\n  All essential files present.")
-        if getattr(args, 'check_misplaced', False):
+        if getattr(args, "check_misplaced", False):
             misplaced = find_misplaced_files(root)
             if misplaced:
                 print(f"\n  Misplaced files: {len(misplaced)}")
@@ -1738,12 +2151,13 @@ def _run_health_checks(args, root, py_files, third_party, unique):
                     print(f"       {fpath} -> {expected}")
             else:
                 print("\n  No misplaced files detected.")
-    if getattr(args, 'fix_gitignore', False):
+    if getattr(args, "fix_gitignore", False):
         generate_gitignore(root)
 
 
-def _run_optional_reports(args, unique, third_party, counter, root,
-                          py_files, import_locs):
+def _run_optional_reports(
+    args, unique, third_party, counter, root, py_files, import_locs
+):
     """Run optional output reports (graph, stats, verbose, CI, health, etc.)."""
     if args.graph:
         write_graph(third_party, root)
@@ -1759,7 +2173,9 @@ def _run_optional_reports(args, unique, third_party, counter, root,
         print(f"\n  Detailed import report ({len(unique)} packages):")
         for mod in unique:
             pkg = resolve_name(mod)
-            print(f"\n  {pkg}  ({counter[mod]} import{'s' if counter[mod]>1 else ''}):")
+            print(
+                f"\n  {pkg}  ({counter[mod]} import{'s' if counter[mod] > 1 else ''}):"
+            )
             for fpath, lineno in third_party[mod]:
                 short = os.path.relpath(fpath, root)
                 print(f"    {short}:{lineno}")
@@ -1792,6 +2208,7 @@ def _run_optional_reports(args, unique, third_party, counter, root,
 #  Main
 # =============================================================================
 
+
 def main():
     """Entry point: parse arguments and run the dependency analysis pipeline."""
     args = parse_args()
@@ -1801,9 +2218,9 @@ def main():
         print(f"ERROR: {root} is not a directory.")
         sys.exit(1)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  x_ray_project v{__version__} -- scanning {root.name}/")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # -- Step 0: clean __pycache__ --
     if args.clean_pycache:
@@ -1830,17 +2247,20 @@ def main():
     print(f"  {len(unique)} third-party packages detected")
     if local_modules:
         display = sorted(local_modules)[:15]
-        print(f"  {len(local_modules)} local modules excluded: "
-              f"{', '.join(display)}"
-              f"{'...' if len(local_modules) > 15 else ''}")
+        print(
+            f"  {len(local_modules)} local modules excluded: "
+            f"{', '.join(display)}"
+            f"{'...' if len(local_modules) > 15 else ''}"
+        )
 
     # -- Steps 4-6: build, write, report --
     output_lines, not_installed = _build_output_lines(args, unique, root)
     _write_output(args, output_lines, unique, root, not_installed)
-    _run_optional_reports(args, unique, third_party, counter, root,
-                          py_files, import_locs)
+    _run_optional_reports(
+        args, unique, third_party, counter, root, py_files, import_locs
+    )
 
-    print(f"\n{'='*60}\n")
+    print(f"\n{'=' * 60}\n")
 
 
 if __name__ == "__main__":

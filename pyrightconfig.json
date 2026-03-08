@@ -1,0 +1,7 @@
+{
+    "typeCheckingMode": "standard",
+    "reportPossiblyUnbound": "warning",
+    "reportOptionalMemberAccess": "warning",
+    "reportArgumentType": "warning",
+    "exclude": ["_archive", "__pycache__", ".ruff_cache"]
+}

@@ -83,3 +83,8 @@ xray_*.json
 *.pyc
 .ruff_cache/
 
+
+# X-Ray scan artifacts
+xray_report.json
+import_graph.html
+import_graph.dot
