@@ -40,7 +40,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
+    except (AttributeError, OSError):
         pass
 
 # === CRASH DIAGNOSTICS LOGGER ===
@@ -674,9 +674,7 @@ def parse_args():
         default=[],
         help="Folder prefixes to skip (space-separated).",
     )
-    p.add_argument(
-        "--include", nargs="*", default=[], help="Only scan these folder prefixes."
-    )
+    p.add_argument("--include", nargs="*", default=[], help="Only scan these folder prefixes.")
     p.add_argument(
         "--merge",
         type=str,
@@ -728,9 +726,7 @@ def parse_args():
         action="store_true",
         help="Fail (exit 1) if unapproved packages found (needs approved.txt).",
     )
-    p.add_argument(
-        "--no-pin", action="store_true", help="Do not pin versions in the output."
-    )
+    p.add_argument("--no-pin", action="store_true", help="Do not pin versions in the output.")
     p.add_argument(
         "--no-descriptions",
         action="store_true",
@@ -747,9 +743,7 @@ def parse_args():
         action="store_true",
         help="Analyze project directory structure and suggest improvements.",
     )
-    p.add_argument(
-        "--check-junk", action="store_true", help="Detect junk, backup, and temp files."
-    )
+    p.add_argument("--check-junk", action="store_true", help="Detect junk, backup, and temp files.")
     p.add_argument(
         "--check-essentials",
         action="store_true",
@@ -814,11 +808,7 @@ def collect_py_files(root, args):
     for dirpath, dirnames, filenames in os.walk(root):
         rel_dir = os.path.relpath(dirpath, root)
         # prune dirs in-place
-        dirnames[:] = [
-            d
-            for d in dirnames
-            if not _skip_dir(d, os.path.join(rel_dir, d) if rel_dir != "." else d)
-        ]
+        dirnames[:] = [d for d in dirnames if not _skip_dir(d, os.path.join(rel_dir, d) if rel_dir != "." else d)]
         for fn in filenames:
             if fn.endswith(".py") and fn != "x_ray_project.py":
                 results.append(Path(dirpath) / fn)
@@ -949,9 +939,7 @@ def _find_deep_tree_modules(root, known_pypi):
             dirnames.clear()
             continue
         for d in dirnames:
-            if not (
-                d.isidentifier() and not d.startswith(".") and d not in _ALWAYS_SKIP
-            ):
+            if not (d.isidentifier() and not d.startswith(".") and d not in _ALWAYS_SKIP):
                 continue
             if d in known_pypi:
                 continue
@@ -961,11 +949,7 @@ def _find_deep_tree_modules(root, known_pypi):
         for fn in filenames:
             if fn.endswith(".py"):
                 stem = fn[:-3]
-                if (
-                    stem.isidentifier()
-                    and not stem.startswith("_")
-                    and stem not in known_pypi
-                ):
+                if stem.isidentifier() and not stem.startswith("_") and stem not in known_pypi:
                     local.add(stem)
     return local
 
@@ -1051,14 +1035,7 @@ def merge_with_existing(new_lines, merge_path):
                 line = raw.strip()
                 if not line or line.startswith("#"):
                     continue
-                name = (
-                    line.split("==")[0]
-                    .split(">=")[0]
-                    .split("<=")[0]
-                    .split("~=")[0]
-                    .split("!=")[0]
-                    .strip()
-                )
+                name = line.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0].split("!=")[0].strip()
                 existing_pkgs[name.lower()] = raw.rstrip("\n")
 
     # Build merged list: existing pins win, new packages are appended
@@ -1148,9 +1125,7 @@ _DEFAULT_ENTRYPOINTS = frozenset(
 
 def find_orphans(root, py_files, import_locs, custom_entrypoints=None):
     """Return .py files not reachable from any entrypoint via import graph."""
-    ep_names = (
-        set(custom_entrypoints) if custom_entrypoints else set(_DEFAULT_ENTRYPOINTS)
-    )
+    ep_names = set(custom_entrypoints) if custom_entrypoints else set(_DEFAULT_ENTRYPOINTS)
 
     file_to_module = {}
     module_to_files = defaultdict(set)
@@ -1245,7 +1220,7 @@ def _build_graph_data(third_party, root):
             if short not in file_metrics:
                 try:
                     size = Path(fpath).stat().st_size
-                except Exception:
+                except OSError:
                     size = 0
                 file_metrics[short] = {"size": size, "imports": set()}
             file_metrics[short]["imports"].add(pkg)
@@ -1389,9 +1364,7 @@ def _graph_javascript():
 def write_interactive_graph(third_party, root):
     """Generate a standalone HTML file with an interactive dependency graph + table view."""
     html_path = root / "import_graph.html"
-    nodes, edges, file_metrics, package_metrics, table_rows = _build_graph_data(
-        third_party, root
-    )
+    nodes, edges, file_metrics, package_metrics, table_rows = _build_graph_data(third_party, root)
     data_json = json.dumps({"nodes": nodes, "edges": edges})
     table_json = json.dumps(table_rows)
     css = _graph_css()
@@ -1613,9 +1586,7 @@ _PLACEMENT_RULES = [
     },
     # Shell scripts / batch files at root or scripts/
     {
-        "check": lambda rel, fn: (
-            fn.endswith((".sh", ".bat", ".ps1")) and not fn.startswith(".")
-        ),
+        "check": lambda rel, fn: fn.endswith((".sh", ".bat", ".ps1")) and not fn.startswith("."),
         "expected_dirs": {".", "scripts", "bin", "tools"},
         "description": "Scripts should be at root or in scripts/ directory",
     },
@@ -1656,10 +1627,7 @@ def find_misplaced_files(root):
                 if rule["check"](rel_dir, fn):
                     if top_dir not in rule["expected_dirs"]:
                         rel_file = os.path.join(rel_dir, fn) if rel_dir != "." else fn
-                        expected = (
-                            " or ".join(sorted(rule["expected_dirs"] - {"."}))
-                            or "project root"
-                        )
+                        expected = " or ".join(sorted(rule["expected_dirs"] - {"."})) or "project root"
                         misplaced.append((rel_file, rule["description"], expected))
                     break  # only match first rule per file
 
@@ -1724,9 +1692,7 @@ def _check_root_clutter(report, root_file_count):
         )
         report["score"] -= min(15, root_file_count - 10)
     elif root_file_count <= 5:
-        report["good"].append(
-            f"Clean root: only {root_file_count} Python files at project root."
-        )
+        report["good"].append(f"Clean root: only {root_file_count} Python files at project root.")
 
 
 def _check_tests(report, dir_counts, py_files):
@@ -1734,9 +1700,7 @@ def _check_tests(report, dir_counts, py_files):
     tests_dir = any(d in dir_counts for d in ("tests", "test", "Tests"))
     if tests_dir:
         test_count = sum(dir_counts.get(d, 0) for d in ("tests", "test", "Tests"))
-        report["good"].append(
-            f"Tests directory present with {test_count} test file(s)."
-        )
+        report["good"].append(f"Tests directory present with {test_count} test file(s).")
     else:
         scattered_tests = [f for f in py_files if f.name.startswith("test_")]
         if scattered_tests:
@@ -1745,9 +1709,7 @@ def _check_tests(report, dir_counts, py_files):
             )
             report["score"] -= 10
         else:
-            report["issues"].append(
-                "NO TESTS: No test files or tests/ directory found."
-            )
+            report["issues"].append("NO TESTS: No test files or tests/ directory found.")
             report["score"] -= 15
 
 
@@ -1772,32 +1734,24 @@ def _check_init_files(report, root):
 def analyze_structure(root, py_files, third_party):
     """Analyze overall project structure and return a health report."""
     report = {"score": 100, "issues": [], "good": [], "stats": {}}
-    stats, root_file_count, dir_counts, largest_files = _gather_file_stats(
-        root, py_files, third_party
-    )
+    stats, root_file_count, dir_counts, largest_files = _gather_file_stats(root, py_files, third_party)
     report["stats"] = stats
 
     _check_root_clutter(report, root_file_count)
     _check_tests(report, dir_counts, py_files)
 
     # Check: docs directory
-    docs_exists = (
-        (root / "docs").exists() or (root / "Docs").exists() or (root / "doc").exists()
-    )
+    docs_exists = (root / "docs").exists() or (root / "Docs").exists() or (root / "doc").exists()
     if docs_exists:
         report["good"].append("Documentation directory present.")
     else:
-        report["issues"].append(
-            "NO DOCS: Consider adding a docs/ directory for project documentation."
-        )
+        report["issues"].append("NO DOCS: Consider adding a docs/ directory for project documentation.")
         report["score"] -= 5
 
     # Check: very large files
     for fpath, lines in largest_files[:5]:
         if lines > 1000:
-            report["issues"].append(
-                f"LARGE FILE: {fpath} has {lines:,} lines. Consider splitting into modules."
-            )
+            report["issues"].append(f"LARGE FILE: {fpath} has {lines:,} lines. Consider splitting into modules.")
             report["score"] -= 3
 
     _check_init_files(report, root)
@@ -1871,21 +1825,13 @@ def generate_gitignore(root):
     if gitignore_path.exists():
         existing = gitignore_path.read_text(encoding="utf-8")
         # Find lines in template that are missing from existing
-        existing_lines = {
-            ln.strip()
-            for ln in existing.splitlines()
-            if ln.strip() and not ln.startswith("#")
-        }
+        existing_lines = {ln.strip() for ln in existing.splitlines() if ln.strip() and not ln.startswith("#")}
         template_lines = [ln for ln in _GITIGNORE_PYTHON.splitlines()]
 
         additions = []
         for line in template_lines:
             stripped = line.strip()
-            if (
-                stripped
-                and not stripped.startswith("#")
-                and stripped not in existing_lines
-            ):
+            if stripped and not stripped.startswith("#") and stripped not in existing_lines:
                 additions.append(line)
 
         if additions:
@@ -2088,9 +2034,7 @@ def _write_output(args, output_lines, unique, root, not_installed):
     print(f"\n  Written -> {out_path}  ({len(unique)} packages)")
 
     if not_installed:
-        print(
-            f"  WARNING: {len(not_installed)} package(s) not installed locally (no version pin):"
-        )
+        print(f"  WARNING: {len(not_installed)} package(s) not installed locally (no version pin):")
         for p in not_installed:
             print(f"       - {p}")
 
@@ -2111,7 +2055,7 @@ def _run_ci_check(unique, root):
         print(f"\n  CI FAIL -- {len(unapproved)} unapproved package(s):")
         for p in sorted(unapproved):
             print(f"       {p}")
-        sys.exit(1)
+        raise SystemExit(1)
     else:
         print("\n  CI PASS -- all packages approved.")
 
@@ -2128,9 +2072,7 @@ def _run_health_checks(args, root, py_files, third_party, unique):
         if getattr(args, "check_junk", False):
             junk_files, junk_dirs = find_junk_files(root)
             if junk_files or junk_dirs:
-                print(
-                    f"\n  Junk: {len(junk_files)} file(s), {len(junk_dirs)} cached dir(s)"
-                )
+                print(f"\n  Junk: {len(junk_files)} file(s), {len(junk_dirs)} cached dir(s)")
                 for f_name in junk_files[:10]:
                     print(f"       {f_name}")
             else:
@@ -2155,9 +2097,7 @@ def _run_health_checks(args, root, py_files, third_party, unique):
         generate_gitignore(root)
 
 
-def _run_optional_reports(
-    args, unique, third_party, counter, root, py_files, import_locs
-):
+def _run_optional_reports(args, unique, third_party, counter, root, py_files, import_locs):
     """Run optional output reports (graph, stats, verbose, CI, health, etc.)."""
     if args.graph:
         write_graph(third_party, root)
@@ -2173,9 +2113,7 @@ def _run_optional_reports(
         print(f"\n  Detailed import report ({len(unique)} packages):")
         for mod in unique:
             pkg = resolve_name(mod)
-            print(
-                f"\n  {pkg}  ({counter[mod]} import{'s' if counter[mod] > 1 else ''}):"
-            )
+            print(f"\n  {pkg}  ({counter[mod]} import{'s' if counter[mod] > 1 else ''}):")
             for fpath, lineno in third_party[mod]:
                 short = os.path.relpath(fpath, root)
                 print(f"    {short}:{lineno}")
@@ -2216,7 +2154,7 @@ def main():
 
     if not root.is_dir():
         print(f"ERROR: {root} is not a directory.")
-        sys.exit(1)
+        raise SystemExit(1)
 
     print(f"\n{'=' * 60}")
     print(f"  x_ray_project v{__version__} -- scanning {root.name}/")
@@ -2256,9 +2194,7 @@ def main():
     # -- Steps 4-6: build, write, report --
     output_lines, not_installed = _build_output_lines(args, unique, root)
     _write_output(args, output_lines, unique, root, not_installed)
-    _run_optional_reports(
-        args, unique, third_party, counter, root, py_files, import_locs
-    )
+    _run_optional_reports(args, unique, third_party, counter, root, py_files, import_locs)
 
     print(f"\n{'=' * 60}\n")
 
