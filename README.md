@@ -30,6 +30,18 @@ Launches a **Tkinter GUI** → select a folder → scan for duplicates → revie
 - `Pillow` (optional) — zoom comparison window
 - `tkinter`, `sqlite3` (stdlib)
 
+## Code Quality — X-Ray Scan (March 2026)
+
+| Metric | Value |
+|--------|-------|
+| Files scanned | 3 |
+| Rules checked | 42 |
+| HIGH severity | 1 (SEC-007 false positive: `create_subprocess_exec` matches eval/exec pattern) |
+| MEDIUM severity | 0 |
+| Status | Clean |
+
+Run locally: `python -m xray . --dry-run`
+
 ## License
 
 MIT
