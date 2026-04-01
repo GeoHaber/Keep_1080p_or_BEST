@@ -3,10 +3,8 @@
 # 3 third-party packages detected
 
 # Numerical computing
-numpy==2.2.6
+numpy==1.26.4
 # Image manipulation
 Pillow==11.3.0
-# Media playback
-python-vlc>=3.0
 # Progress bars
 tqdm==4.67.1

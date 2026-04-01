@@ -3,6 +3,12 @@ name = "keep-1080p-or-best"
 version = "6.1.0"
 description = "Visual AI-powered duplicate video comparator and quality keeper"
 requires-python = ">=3.10"
+dependencies = [
+    "zen-core-libs",
+]
+
+[tool.uv.sources]
+zen-core-libs = { workspace = true }
 
 [tool.ruff]
 line-length = 120
